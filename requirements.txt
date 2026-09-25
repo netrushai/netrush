@@ -1,0 +1,2 @@
+# Intentionally empty: NetRush uses only the Python standard library (3.10+).
+# This file exists so hosts that auto-detect Python projects recognise it.

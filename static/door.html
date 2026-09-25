@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Door Keypad</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  body { background: radial-gradient(900px 500px at 50% -10%, color-mix(in srgb, var(--lime) 18%, transparent), transparent 70%), var(--bg); }
+  .stage { display: grid; grid-template-columns: 340px 1fr; gap: 32px; align-items: start; max-width: 900px; margin: 10px auto; }
+  @media (max-width: 800px) { .stage { grid-template-columns: 1fr; } }
+  .device { background: linear-gradient(160deg, #1b2320, #0b0f0d); border-radius: 30px; padding: 22px; color: #fff;
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgb(255 255 255 / .08); }
+  .device .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: .85rem; color: rgb(255 255 255 / .7); }
+  .led { width: 10px; height: 10px; border-radius: 50%; background: #3a403d; margin-left: auto; transition: .2s; }
+  .led.ok { background: #4ade80; box-shadow: 0 0 16px #4ade80; }
+  .led.bad { background: #f87171; box-shadow: 0 0 16px #f87171; }
+  .display { margin: 18px 0; background: #050806; border-radius: 14px; height: 70px; display: grid; place-items: center;
+    font-family: ui-monospace, Menlo, monospace; font-size: 1.6rem; letter-spacing: .2em; white-space: nowrap; color: var(--lime);
+    text-shadow: 0 0 12px color-mix(in srgb, var(--lime) 60%, transparent); box-shadow: inset 0 2px 8px rgb(0 0 0 / .8); }
+  .display.msg { font-size: .95rem; letter-spacing: .04em; font-family: var(--font); font-weight: 700; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .keys button { height: 58px; border-radius: 16px; font-size: 1.35rem; font-weight: 700; background: #222b27; color: #fff;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .07), 0 3px 0 #070a08; }
+  .keys button:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgb(255 255 255 / .07); }
+  .keys .enter { background: var(--lime); color: var(--lime-ink); font-size: .95rem; }
+  .keys .clr { font-size: .9rem; color: rgb(255 255 255 / .7); }
+  .reader { margin-top: 18px; border-top: 1px solid rgb(255 255 255 / .08); padding-top: 16px; text-align: center; }
+  .fp { width: 76px; height: 76px; border-radius: 50%; margin: 0 auto 8px; display: grid; place-items: center;
+    background: #151c19; border: 2px solid #2c3531; color: rgb(255 255 255 / .6); }
+  .fp svg { width: 40px; height: 40px; }
+  .fp.scan { animation: scan 1s ease-in-out; border-color: var(--lime); color: var(--lime); }
+  @keyframes scan { 50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--lime) 20%, transparent); } }
+  .doorway { height: 300px; border-radius: 20px; background: var(--surface-2); position: relative; overflow: hidden; perspective: 900px; border: 1px solid var(--line); }
+  .panel { position: absolute; inset: 16px 16px 0; background: linear-gradient(180deg, #2a3430, #18201c); border-radius: 12px 12px 0 0;
+    transform-origin: left center; transition: transform 1s cubic-bezier(.3, .9, .3, 1); display: grid; place-items: center; }
+  .panel::after { content: ""; position: absolute; right: 18px; top: 50%; width: 10px; height: 40px; border-radius: 6px; background: #8a948e; }
+  .open .panel { transform: rotateY(-72deg); }
+  .panel span { color: rgb(255 255 255 / .35); font-weight: 800; letter-spacing: .2em; font-size: .8rem; }
+  .result { font-weight: 800; font-size: 1.1rem; margin-top: 14px; }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="logo" href="/"><i></i><span>NetRush</span><small>door</small></a>
+  <nav><a href="/demo" class="keep">Demo phone</a><a href="/" class="cta">Booking site</a></nav>
+</div></header>
+<main class="wrap">
+  <div class="stage">
+    <div class="device">
+      <div class="brand">NETRUSH ENTRY<span class="led" id="led"></span></div>
+      <div class="display" id="disp">— — — — — —</div>
+      <div class="keys" id="keys"></div>
+      <div class="reader">
+        <div class="fp" id="fp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M12 11v3a8 8 0 01-1.2 4.2M8.5 20a10 10 0 001.5-6v-2a2 2 0 014 0v1M15.5 20.5c.5-2 .5-4 .5-6.5v-2a4 4 0 00-8 0v2c0 1-.1 2-.4 3M5 16c.3-1 .4-2 .4-3v-1a6.6 6.6 0 0113.2 0v1c0 2 0 3.5-.3 5"/></svg></div>
+        <div class="row" style="justify-content:center"><select id="fp-id" style="width:auto;background:#151c19;color:#fff;border-color:#2c3531;padding:8px 12px"></select>
+          <button class="sm lime" id="fp-go">Scan finger</button></div>
+      </div>
+    </div>
+    <div>
+      <div class="eyebrow">Demo · web door keypad</div>
+      <h1 style="margin-top:6px">The arena door</h1>
+      <p class="muted">This behaves exactly like the real keypad and fingerprint reader: it asks the server, which checks the
+        code or member and answers open or stay locked. Codes only work from 10 minutes before a paid slot until it ends.
+        Five wrong codes lock the keypad for five minutes.</p>
+      <div class="doorway" id="door"><div class="panel"><span>ARENA</span></div></div>
+      <div class="result" id="result"></div>
+      <p class="small muted" id="why"></p>
+    </div>
+  </div>
+</main>
+<script src="/common.js"></script>
+<script>
+let code = "";
+const REASONS = { booking: "Booking code accepted.", member: "Member recognised. Welcome back!", invalid: "Wrong code, or it isn't valid right now.",
+  locked_out: "Too many wrong codes. Keypad locked for 5 minutes.", not_entitled: "No active membership for this fingerprint." };
+$("#keys").innerHTML = ["1","2","3","4","5","6","7","8","9","C","0","OK"].map(k =>
+  `<button class="${k === "OK" ? "enter" : k === "C" ? "clr" : ""}" data-k="${k}">${k === "C" ? "Clear" : k === "OK" ? "Enter" : k}</button>`).join("");
+function show() { const d = $("#disp"); d.classList.remove("msg"); d.textContent = code ? code.replace(/./g, "•").padEnd(6, "_").split("").join(" ") : "— — — — — —"; }
+$$("#keys button").forEach(b => b.onclick = () => press(b.dataset.k));
+document.addEventListener("keydown", e => { if (/^\d$/.test(e.key)) press(e.key); else if (e.key === "Enter") press("OK"); else if (e.key === "Backspace") { code = code.slice(0, -1); show(); } });
+function press(k) {
+  if (k === "C") { code = ""; return show(); }
+  if (k === "OK") return submit({ code });
+  if (code.length < 6) { code += k; show(); if (code.length === 6) setTimeout(() => submit({ code }), 250); }
+}
+async function submit(body) {
+  if (body.code !== undefined && !body.code) return;
+  let r;
+  try { r = await api("/api/demo/door", body); } catch (e) { toast(e.message, true); return; }
+  const led = $("#led"), d = $("#disp");
+  led.className = "led " + (r.open ? "ok" : "bad");
+  d.classList.add("msg"); d.textContent = r.open ? "ACCESS GRANTED" : "ACCESS DENIED";
+  $("#door").classList.toggle("open", r.open);
+  $("#result").innerHTML = r.open ? `<span style="color:var(--ok)">Door unlocked</span>` : `<span style="color:var(--bad)">Door stays locked</span>`;
+  $("#why").textContent = r.reason === "too_early"
+    ? `That's a valid code, but it only opens the door from ${niceDate(r.valid_from)} ${hhmm(r.valid_from)} (10 min before the slot).`
+    : REASONS[r.reason] || r.reason;
+  if (r.reason === "too_early") d.textContent = "OPENS " + hhmm(r.valid_from);
+  code = "";
+  setTimeout(() => { led.className = "led"; show(); $("#door").classList.remove("open"); }, 4500);
+}
+$("#fp-go").onclick = () => { const f = $("#fp"); f.classList.remove("scan"); f.offsetWidth; f.classList.add("scan");
+  setTimeout(() => submit({ fingerprint_user_id: $("#fp-id").value }), 700); };
+api("/api/config").then(demoBar);
+api("/api/demo/info").then(i => { $("#fp-id").innerHTML = i.fingerprints.map(f => `<option value="${f.id}">#${f.id} ${esc(f.who.split(" (")[0])}</option>`).join(""); })
+  .catch(() => { $("#why").textContent = "Demo mode is off on this server."; });
+show();
+</script>
+</body>
+</html>

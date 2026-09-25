@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secure Payment</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  .gw { max-width: 440px; margin: 28px auto; }
+  .gw-head { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .gw-lock { width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: var(--bg); display: grid;
+    place-items: center; font-weight: 800; font-size: .8rem; }
+  .methods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0 12px; }
+  .methods button { background: var(--surface); color: var(--ink); border: 1px solid var(--line); font-weight: 600; }
+  .methods button[aria-pressed="true"] { border-color: var(--ink); background: var(--surface); box-shadow: 0 0 0 4px color-mix(in srgb, var(--lime) 45%, transparent); }
+  .spin { width: 18px; height: 18px; border: 3px solid rgb(255 255 255 / .35); border-top-color: currentColor;
+    border-radius: 50%; display: inline-block; animation: sp .8s linear infinite; vertical-align: -3px; margin-right: 8px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="logo" href="/"><i></i><span>NetRush</span><small>secure payment</small></a>
+</div></header>
+<main class="wrap">
+  <div class="card gw" id="gw">
+    <div class="gw-head"><span class="gw-lock">₹</span>
+      <div><b id="merchant">NetRush</b><div class="small muted">Secure checkout <span id="mode" class="pill warn">TEST MODE</span></div></div>
+      <span class="spacer"></span><span class="small muted" id="timer"></span></div>
+    <div style="margin:16px 0 4px" class="muted small" id="title"></div>
+    <div class="big-amount" id="amount">…</div>
+    <div class="small muted" id="detail"></div>
+
+    <div id="mock-ui">
+      <div class="methods" role="group" aria-label="Payment method">
+        <button data-m="upi" aria-pressed="true">UPI</button><button data-m="card" aria-pressed="false">Card</button>
+        <button data-m="nb" aria-pressed="false">Netbanking</button></div>
+      <div data-mp="upi"><label>UPI ID</label><input value="demo@okbank"></div>
+      <div data-mp="card" class="hidden"><label>Card number</label><input value="4111 1111 1111 1111">
+        <div class="row" style="margin-top:8px"><input value="12/30" style="flex:1"><input value="123" style="flex:1"></div></div>
+      <div data-mp="nb" class="hidden"><label>Bank</label><select><option>HDFC Bank</option><option>ICICI Bank</option><option>SBI</option></select></div>
+      <p class="small muted" style="margin:10px 0 0">This is a mock gateway for the demo. No money moves. Replace it with
+        Razorpay by adding keys; nothing else changes.</p>
+    </div>
+
+    <button id="pay" style="width:100%;margin-top:16px">Pay</button>
+    <button id="cancel" class="ghost" style="width:100%;margin-top:8px">Cancel and go back</button>
+    <p id="msg" class="small" style="margin:12px 0 0"></p>
+  </div>
+</main>
+<script src="/common.js"></script>
+<script>
+const q = new URLSearchParams(location.search), ID = q.get("id"), K = q.get("k");
+let P;
+
+async function load() {
+  try { P = await api(`/api/pay?id=${encodeURIComponent(ID)}&k=${encodeURIComponent(K)}`); }
+  catch (e) { $("#gw").innerHTML = `<h2>Payment link not found</h2><p class="muted">It may have expired. <a href="/">Back to booking</a></p>`; return; }
+  document.title = "Pay · " + P.facility;
+  $("#merchant").textContent = P.facility;
+  $("#title").textContent = P.title;
+  $("#amount").textContent = rupees(P.amount);
+  $("#detail").textContent = P.detail;
+  $("#pay").textContent = "Pay " + rupees(P.amount);
+  $("#mode").classList.toggle("hidden", P.provider !== "mock");
+  $("#mock-ui").classList.toggle("hidden", P.provider !== "mock");
+  if (P.status === "paid") return finish({});
+  if (P.booking_status === "expired" || P.booking_status === "cancelled") {
+    $("#msg").innerHTML = `<span style="color:var(--bad)">This slot hold has expired.</span> <a href="/">Pick a slot again</a>`;
+    $("#pay").disabled = true; return;
+  }
+  if (P.hold_seconds) tick(P.hold_seconds);
+}
+
+function tick(left) {
+  if (left <= 0) { $("#timer").textContent = "Hold expired"; return; }
+  $("#timer").textContent = `Slot held ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  setTimeout(() => tick(left - 1), 1000);
+}
+
+$$(".methods button").forEach(b => b.onclick = () => {
+  $$(".methods button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  $$("[data-mp]").forEach(p => p.classList.toggle("hidden", p.dataset.mp !== b.dataset.m));
+});
+
+async function finish(extra) {
+  $("#pay").disabled = true; $("#cancel").disabled = true;
+  $("#pay").innerHTML = `<span class="spin"></span>Confirming payment…`;
+  try {
+    const r = await api("/api/pay/complete", { id: ID, k: K, ...extra });
+    location.replace(r.redirect);
+  } catch (e) { $("#msg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; $("#pay").disabled = false; $("#pay").textContent = "Try again"; }
+}
+
+$("#pay").onclick = async () => {
+  if (P.provider === "razorpay") {
+    await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "https://checkout.razorpay.com/v1/checkout.js"; s.onload = ok; s.onerror = bad; document.head.append(s); });
+    new Razorpay({ key: P.key_id, order_id: P.order_id, amount: P.amount * 100, currency: "INR", name: P.facility,
+      description: P.title, prefill: { contact: "" }, handler: resp => finish(resp) }).open();
+    return;
+  }
+  $("#pay").disabled = true; $("#pay").innerHTML = `<span class="spin"></span>Processing…`;
+  setTimeout(() => finish({}), 1200);   // feel of a real gateway round-trip
+};
+$("#cancel").onclick = async () => {
+  try { const r = await api("/api/pay/cancel", { id: ID, k: K }); location.replace(r.redirect); } catch (e) { history.back(); }
+};
+api("/api/config").then(demoBar);
+load();
+</script>
+</body>
+</html>

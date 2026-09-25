@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Phone</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  .demo-grid { display: grid; grid-template-columns: 380px 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 900px) { .demo-grid { grid-template-columns: 1fr; } }
+  .phone { background: #0b0f0d; border-radius: 44px; padding: 12px; box-shadow: var(--shadow-lg), inset 0 0 0 2px #29302c; position: sticky; top: 84px; }
+  .screen { background: #efeae2; border-radius: 34px; height: 680px; display: flex; flex-direction: column; overflow: hidden; }
+  @media (prefers-color-scheme: dark) { .screen { background: #0f1512; } }
+  .notch { width: 110px; height: 26px; background: #0b0f0d; border-radius: 0 0 16px 16px; margin: 0 auto; flex: none; }
+  .ph-head { padding: 8px 16px 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .ph-head input { padding: 8px 12px; font-size: .85rem; border-radius: 999px; }
+  .tabs2 { display: flex; gap: 6px; margin-top: 8px; }
+  .tabs2 button { flex: 1; padding: 6px; font-size: .78rem; background: var(--surface-2); color: var(--ink-2); }
+  .tabs2 button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .msgs { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .bubble { max-width: 88%; background: var(--surface); border-radius: 16px 16px 16px 4px; padding: 9px 12px 6px;
+    font-size: .86rem; line-height: 1.4; box-shadow: 0 1px 1px rgb(0 0 0 / .08); animation: rise2 .25s ease-out; }
+  .bubble.wa { background: #dcf8c6; color: #111; }
+  @media (prefers-color-scheme: dark) { .bubble.wa { background: #1f4d36; color: #eef; } }
+  .bubble .meta { display: flex; gap: 8px; font-size: .68rem; color: var(--ink-3); margin-top: 4px; }
+  .bubble.wa .meta { color: #557; }
+  .bubble .to { font-weight: 700; }
+  .bubble code { font-weight: 800; font-size: 1rem; letter-spacing: .12em; background: var(--lime); color: var(--lime-ink); padding: 0 5px; border-radius: 5px; }
+  .login-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--line); align-items: center; }
+  .login-row:last-child { border-bottom: 0; }
+  .login-row code { font-size: .95rem; font-weight: 800; }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="logo" href="/"><i></i><span>NetRush</span><small>demo</small></a>
+  <nav><a href="/" class="keep">Booking site</a><a href="/door" class="keep">Door keypad</a><a href="/admin" class="cta">Admin</a></nav>
+</div></header>
+<main class="wrap">
+  <div class="demo-grid">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="ph-head">
+        <div class="row" style="margin-bottom:8px"><b>Messages</b><span class="spacer"></span><span class="tiny faint" id="live">● live</span></div>
+        <input id="filter" inputmode="tel" placeholder="Show one number, e.g. 9811122233">
+        <div class="tabs2"><button data-ch="" aria-pressed="true">All</button><button data-ch="sms" aria-pressed="false">SMS</button>
+          <button data-ch="whatsapp" aria-pressed="false">WhatsApp</button></div>
+      </div>
+      <div class="msgs" id="msgs"></div>
+    </div></div>
+
+    <div class="stack">
+      <div>
+        <div class="eyebrow">Demo mode</div>
+        <h1 style="margin-top:6px">Every message, as the customer sees it</h1>
+        <p class="muted">In the demo nothing is really sent. Every SMS and WhatsApp the system sends lands on this phone instead:
+          booking confirmations, door codes, login codes, membership reminders and refunds. It updates live.</p>
+      </div>
+      <div class="card" id="logins">
+        <h2>Demo logins</h2>
+        <div id="login-list"></div>
+      </div>
+      <div class="card">
+        <h2>Suggested walkthrough (5 minutes)</h2>
+        <ol class="steps small">
+          <li><a href="/" target="_blank"><b>Book a court</b></a> with any name and a mobile number. Pay on the test gateway.</li>
+          <li>Watch the <b>confirmation and door code</b> arrive on this phone.</li>
+          <li>Type the code on the <a href="/door" target="_blank"><b>door keypad</b></a>. It opens from 10 min before the slot. Try a wrong code too.</li>
+          <li>Log in to the <a href="/portal" target="_blank"><b>member portal</b></a> as the member, then <b>renew online</b> (₹2,000 / month).</li>
+          <li>Open the <a href="/admin" target="_blank"><b>admin</b></a>: today's bookings, a phone reservation without payment, analytics, and the health check.</li>
+          <li>Cancel a booking from its confirmation page. The refund message arrives here.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h2>Fingerprints to try on the door</h2>
+        <div id="fps" class="small"></div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="/common.js"></script>
+<script>
+let CH = "", last = "";
+async function loadInfo() {
+  try {
+    const i = await api("/api/demo/info");
+    $("#login-list").innerHTML = i.logins.map(l => `<div class="login-row"><div><b>${esc(l.role)}</b>
+      <div class="small muted">Login: <code>${esc(l.login)}</code> · ${esc(l.secret)}</div></div>
+      <a class="btn ghost sm" href="${l.where}" target="_blank">Open</a></div>`).join("");
+    $("#fps").innerHTML = i.fingerprints.map(f => `<div class="row" style="padding:6px 0"><code class="big" style="font-size:.9rem">#${esc(f.id)}</code><span class="muted">${esc(f.who)}</span></div>`).join("");
+  } catch (e) { $("#login-list").innerHTML = `<p class="muted">Demo mode is off on this server.</p>`; }
+}
+function highlight(body) {
+  return esc(body).replace(/\b(\d{6})\b/g, "<code>$1</code>").replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank">$1</a>');
+}
+async function loadMsgs() {
+  try {
+    const phone = $("#filter").value.replace(/\D/g, "");
+    const { messages } = await api("/api/demo/messages?phone=" + phone);
+    const rows = messages.filter(m => !CH || m.channel === CH);
+    const sig = rows.map(r => r.id).join(",");
+    if (sig === last) return; last = sig;
+    $("#msgs").innerHTML = rows.length ? rows.slice().reverse().map(m => `<div class="bubble ${m.channel === "whatsapp" ? "wa" : ""}">
+        ${highlight(m.body)}
+        <div class="meta"><span class="to">${m.channel === "whatsapp" ? "WhatsApp" : "SMS"} → ${esc(m.to_phone)}</span>
+        <span>${niceDate(m.created_at)} ${hhmm(m.created_at)}</span>${m.status !== "sent" ? `<span style="color:var(--bad)">${esc(m.status)}</span>` : ""}</div></div>`).join("")
+      : `<div class="empty">No messages yet. Make a booking and watch them arrive.</div>`;
+    $("#msgs").scrollTop = $("#msgs").scrollHeight;  // newest at the bottom, like a real phone
+    $("#live").style.color = "var(--ok)";
+  } catch (e) { $("#live").style.color = "var(--bad)"; }
+}
+$$(".tabs2 button").forEach(b => b.onclick = () => { CH = b.dataset.ch; last = ""; $$(".tabs2 button").forEach(x => x.setAttribute("aria-pressed", x === b)); loadMsgs(); });
+$("#filter").oninput = () => { last = ""; loadMsgs(); };
+loadInfo(); loadMsgs(); setInterval(loadMsgs, 2500);
+</script>
+</body>
+</html>

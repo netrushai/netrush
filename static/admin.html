@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetRush Admin</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<!-- login -->
+<section id="login" class="hidden" style="min-height:100vh;display:grid;place-items:center;padding:16px">
+  <div class="card" style="width:min(420px,100%);padding:30px">
+    <a class="logo" href="/"><i></i><span>NetRush</span><small>admin</small></a>
+    <h1 style="margin-top:22px">Staff login</h1>
+    <div class="field"><label for="a-phone">Phone</label><input id="a-phone" inputmode="tel" autocomplete="username"></div>
+    <div class="field"><label for="a-pw">Password</label><input id="a-pw" type="password" autocomplete="current-password"></div>
+    <button id="a-go" class="block" style="margin-top:18px">Log in</button>
+    <div class="demo-hint hidden" id="a-demo" style="margin-top:16px"></div>
+  </div>
+</section>
+
+<div class="shell hidden" id="app">
+  <aside class="side" role="tablist">
+    <a class="logo" href="/admin"><i></i><span id="facility">NetRush</span><small>admin</small></a>
+    <button role="tab" data-tab="today" aria-selected="true"></button>
+    <button role="tab" data-tab="people" aria-selected="false"></button>
+    <button role="tab" data-tab="analytics" aria-selected="false"></button>
+    <button role="tab" data-tab="health" aria-selected="false"></button>
+    <button role="tab" data-tab="door" aria-selected="false"></button>
+    <button role="tab" data-tab="msgs" aria-selected="false"></button>
+    <div class="foot"><div id="who"></div><a href="#" id="logout">Log out</a> · <a href="/" target="_blank">Booking site</a></div>
+  </aside>
+
+  <main>
+    <!-- TODAY -->
+    <section data-panel="today" class="stack">
+      <div class="page-head"><div><div class="eyebrow">Front desk</div><h1 style="margin-top:4px" id="t-title">Today</h1></div>
+        <span class="spacer"></span><input type="date" id="t-date" style="width:auto"></div>
+      <div class="stats4" id="t-stats"></div>
+      <div class="card"><div class="section-head"><h2>Bookings</h2><span class="spacer"></span>
+        <button class="sm" id="t-new">+ New booking</button></div>
+        <div class="table-scroll"><table id="t-bookings"></table></div></div>
+
+      <div class="card hidden" id="new-card">
+        <div class="section-head"><h2>New booking</h2><span class="spacer"></span><button class="ghost sm" id="w-close">Close</button></div>
+        <div class="segmented" id="w-mode" role="group" aria-label="Payment">
+          <button data-mode="unpaid" aria-pressed="true">Phone reservation · pay later</button>
+          <button data-mode="desk_paid" aria-pressed="false">Paid at desk</button>
+          <button data-mode="comp" aria-pressed="false">Complimentary</button></div>
+        <p class="small muted" id="w-hint" style="margin:10px 0 14px"></p>
+        <div class="grid3" style="gap:12px">
+          <div><label>Court</label><select id="w-court"></select></div>
+          <div><label>Start</label><input id="w-start" type="time" step="3600" value="18:00"></div>
+          <div><label>Hours</label><select id="w-slots"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+          <div><label>Name</label><input id="w-name"></div>
+          <div><label>Mobile</label><input id="w-phone" inputmode="tel"></div>
+          <div><label>Email (optional)</label><input id="w-email" type="email"></div>
+        </div>
+        <button id="w-go" class="lime" style="margin-top:16px">Create booking</button>
+      </div>
+
+      <div class="grid2">
+        <div class="card"><h2>Waiting for payment</h2><p class="small muted">Phone reservations. They have their door code; collect when they arrive.</p><div id="t-unpaid"></div></div>
+        <div class="card"><h2>Refunds to action</h2><p class="small muted">Card/UPI refunds go back automatically. Cash ones are handed back here.</p><div id="t-refunds"></div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h2>Memberships ending soon</h2><div id="t-expiring"></div></div>
+        <div class="card"><h2>Academy fees due</h2><div id="t-fees"></div></div>
+      </div>
+      <div class="card">
+        <h2>Block a court</h2><p class="small muted">Maintenance or tournaments. Academy batches block their courts automatically.</p>
+        <div class="grid3" style="gap:12px"><div><label>Court</label><select id="k-court"></select></div>
+          <div><label>Reason</label><input id="k-reason" value="Maintenance"></div>
+          <div class="row" style="align-items:end;flex-wrap:nowrap"><div><label>From</label><input id="k-start" type="time" value="06:00"></div>
+          <div><label>To</label><input id="k-end" type="time" value="08:00"></div></div></div>
+        <button id="k-go" class="ghost" style="margin-top:14px">Block on this date</button>
+      </div>
+    </section>
+
+    <!-- PEOPLE -->
+    <section data-panel="people" class="stack hidden">
+      <div class="page-head"><div><div class="eyebrow">Members &amp; academy</div><h1 style="margin-top:4px">People</h1></div>
+        <span class="spacer"></span><input id="p-q" placeholder="Search name, phone or NR-ID" style="width:260px"><button id="p-new">+ Add person</button></div>
+      <div class="card hidden" id="p-form">
+        <h2 id="p-form-h">Add person</h2>
+        <div class="grid3" style="gap:12px">
+          <div><label>Name</label><input id="pf-name"></div>
+          <div><label>Mobile</label><input id="pf-phone" inputmode="tel"></div>
+          <div><label>Email</label><input id="pf-email"></div>
+          <div><label>Fingerprint ID on the lock</label><input id="pf-lock" placeholder="after enrolling on the scanner"></div>
+          <div><label>Guardian (juniors)</label><input id="pf-guardian"></div>
+          <div><label>Reminders via</label><div class="row"><label class="check"><input type="checkbox" id="pf-sms" checked>SMS</label>
+            <label class="check"><input type="checkbox" id="pf-wa" checked>WhatsApp</label></div></div>
+        </div>
+        <div class="row" style="margin-top:14px"><button id="pf-save">Save</button><button class="ghost" id="pf-cancel">Cancel</button></div>
+      </div>
+      <div class="card"><div class="table-scroll"><table id="p-table"></table></div></div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section data-panel="analytics" class="stack hidden">
+      <div class="page-head"><div><div class="eyebrow">Business</div><h1 style="margin-top:4px">Analytics &amp; revenue</h1></div>
+        <span class="spacer"></span>
+        <div class="segmented" id="an-range"><button data-d="7" aria-pressed="false">7 days</button><button data-d="30" aria-pressed="true">30 days</button><button data-d="90" aria-pressed="false">90 days</button></div></div>
+      <div class="stats4" id="an-kpis"></div>
+      <div class="card"><div class="section-head"><div><h2>Money collected per day</h2><p class="small muted" style="margin:0" id="an-daily-sub"></p></div></div>
+        <div class="chart" id="an-daily"></div></div>
+      <div class="grid2">
+        <div class="card"><h2>What's working, what isn't</h2><div id="an-insights"></div></div>
+        <div class="card"><h2>Where the money comes from</h2><div id="an-split"></div>
+          <div class="divider"></div><h3>By sport</h3><div class="table-scroll"><table id="an-sport"></table></div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h2>Court utilisation</h2><p class="small muted">Share of opening hours booked. Hatched = academy.</p><div id="an-courts"></div></div>
+        <div class="card"><h2>Busiest hours</h2><p class="small muted">Share of all courts booked at each hour.</p><div class="chart" id="an-hours"></div></div>
+      </div>
+      <div class="card"><h2>Members &amp; academy</h2><div class="stats4" id="an-members"></div></div>
+    </section>
+
+    <!-- HEALTH -->
+    <section data-panel="health" class="stack hidden">
+      <div class="page-head"><div><div class="eyebrow">System</div><h1 style="margin-top:4px">What's working</h1></div>
+        <span class="spacer"></span><span class="small muted" id="h-time"></span><button class="ghost sm" id="h-refresh">Refresh</button></div>
+      <div class="stats4" id="h-sum"></div>
+      <div class="card" id="h-list"></div>
+      <div class="card hidden" id="h-demo"><h2>Demo data</h2><p class="small muted">Wipe everything and reload the demo members, bookings and history.</p>
+        <button class="danger" id="h-reset">Reset demo data</button></div>
+    </section>
+
+    <!-- DOOR -->
+    <section data-panel="door" class="stack hidden">
+      <div class="page-head"><div><div class="eyebrow">Access</div><h1 style="margin-top:4px">Door</h1></div></div>
+      <div class="grid2">
+        <div class="card">
+          <h2>Test the door</h2>
+          <p class="small muted">Asks the server exactly like the keypad or fingerprint reader does.</p>
+          <div class="row" style="flex-wrap:nowrap"><input id="d-code" inputmode="numeric" maxlength="8" placeholder="Booking code"><button id="d-code-go">Try code</button></div>
+          <div class="row" style="flex-wrap:nowrap;margin-top:10px"><input id="d-fp" placeholder="Fingerprint ID, e.g. 101"><button id="d-fp-go" class="ghost">Try finger</button></div>
+          <div id="d-result" style="margin-top:14px"></div>
+        </div>
+        <div class="card">
+          <h2>Automation</h2>
+          <p class="small muted">Runs by itself every 30 seconds: door codes, reminders, refunds, fingerprint sync.</p>
+          <div class="row"><button class="ghost sm" id="d-tick">Run now</button><button class="ghost sm" id="d-rem">Send due reminders</button></div>
+          <div class="divider"></div>
+          <h3>Connected services</h3><table id="d-prov"></table>
+        </div>
+      </div>
+      <div class="card"><h2>Access log</h2><div class="table-scroll"><table id="d-log"></table></div></div>
+    </section>
+
+    <!-- MESSAGES -->
+    <section data-panel="msgs" class="stack hidden">
+      <div class="page-head"><div><div class="eyebrow">Outbox</div><h1 style="margin-top:4px">SMS &amp; WhatsApp</h1></div></div>
+      <div class="card"><div class="table-scroll"><table id="m-log"></table></div></div>
+    </section>
+  </main>
+</div>
+
+<script src="/common.js"></script>
+<script>
+const A = { cfg: null, cat: null, ov: null, people: [], editing: null, mode: "unpaid", days: 30 };
+const TABS = { today: ["today", "Today"], people: ["people", "Members & academy"], analytics: ["chart", "Analytics"],
+  health: ["pulse", "Health"], door: ["door", "Door"], msgs: ["chat", "Messages"] };
+$$(".side button").forEach(b => b.innerHTML = ICON[TABS[b.dataset.tab][0]] + TABS[b.dataset.tab][1]);
+
+async function boot() {
+  A.cfg = await api("/api/config");
+  $("#facility").textContent = A.cfg.facility; document.title = "Admin · " + A.cfg.facility;
+  $("#t-date").value = A.cfg.today;
+  try { A.cat = await api("/api/admin/catalog"); }
+  catch (e) {
+    if (e.status !== 401 && e.status !== 403) throw e;
+    $("#login").classList.remove("hidden");
+    if (A.cfg.demo) { $("#a-demo").classList.remove("hidden"); $("#a-demo").innerHTML = `<b>Demo:</b> phone <code>9999999999</code> · password <code>admin123</code>`; }
+    return;
+  }
+  $("#app").classList.remove("hidden"); $("#login").classList.add("hidden");
+  $("#h-demo").classList.toggle("hidden", !A.cfg.demo);
+  const opts = A.cat.courts.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  $("#w-court").innerHTML = opts; $("#k-court").innerHTML = opts;
+  setMode("unpaid");
+  await refresh();
+  setInterval(() => document.visibilityState === "visible" && refresh(), 30000);
+}
+
+$("#a-go").onclick = async () => {
+  try { await api("/api/auth/admin", { phone: $("#a-phone").value, password: $("#a-pw").value }); boot(); }
+  catch (e) { toast(e.message, true); }
+};
+$("#a-pw").addEventListener("keydown", e => e.key === "Enter" && $("#a-go").click());
+$("#logout").onclick = async e => { e.preventDefault(); await api("/api/auth/logout", {}); location.reload(); };
+
+function openTab(tab) {
+  $$(".side button").forEach(x => x.setAttribute("aria-selected", x.dataset.tab === tab));
+  $$("[data-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.panel !== tab));
+  if (tab === "people") loadPeople();
+  if (tab === "analytics") loadAnalytics();
+  if (tab === "health") loadHealth();
+  history.replaceState(null, "", "#" + tab);
+}
+$$(".side button").forEach(b => b.onclick = () => openTab(b.dataset.tab));
+
+async function refresh() {
+  A.ov = await api("/api/admin/overview?date=" + $("#t-date").value);
+  renderToday(); renderDoor(); renderMsgs();
+}
+$("#t-date").onchange = refresh;
+
+const payPill = b => b.status === "pending" ? `<span class="pill warn">awaiting payment</span>`
+  : b.pay_status === "paid" ? `<span class="pill ok">paid</span>` : b.pay_status === "comp" ? `<span class="pill plain">complimentary</span>`
+  : `<span class="pill warn">pay on arrival</span>`;
+const SRC = { online: "online", desk: "desk", phone: "phone call" };
+
+function renderToday() {
+  const o = A.ov, conf = o.bookings.filter(b => b.status === "confirmed");
+  $("#t-title").textContent = $("#t-date").value === A.cfg.today ? "Today" : niceDate($("#t-date").value);
+  const owed = o.unpaid.reduce((s, b) => s + b.amount, 0), cash = o.refunds.filter(r => r.refund_status === "manual");
+  $("#t-stats").innerHTML = [
+    ["Bookings", conf.length, `${conf.filter(b => b.source === "online").length} booked online`],
+    ["Collected", rupees(o.collected), "on this day"],
+    ["Pay on arrival", rupees(owed), `${o.unpaid.length} reservation${o.unpaid.length === 1 ? "" : "s"}`],
+    ["Renewals due", o.expiring.length + o.fees_due.length, "members + academy, 7 days"],
+  ].map(([l, v, s]) => `<div class="card stat"><span class="label">${l}</span><b>${v}</b><span class="sub">${s}</span></div>`).join("");
+
+  $("#t-bookings").innerHTML = `<thead><tr><th>Time</th><th>Court</th><th>Customer</th><th>Payment</th><th>Door code</th><th></th></tr></thead><tbody>` +
+    (o.bookings.length ? o.bookings.map(b => `<tr>
+      <td class="num"><b>${hhmm(b.start)}</b><span class="faint">–${hhmm(b.end)}</span></td><td>${esc(b.court)}</td>
+      <td class="who"><b>${esc(b.name)}</b><span>${b.phone}${b.email ? " · " + esc(b.email) : ""} · ${b.ref}</span></td>
+      <td>${payPill(b)}<div class="tiny faint" style="margin-top:4px">${rupees(b.amount)} · ${SRC[b.source] || b.source}</div></td>
+      <td>${b.code ? `<code class="big">${b.code}</code><div class="tiny faint">${esc(b.code_status)} · used ${b.uses}×</div>` : `<span class="faint small">after payment</span>`}</td>
+      <td style="text-align:right;white-space:nowrap">${b.pay_status === "unpaid" && b.status === "confirmed" ? `<button class="sm" data-paid="${b.id}">Mark paid</button> ` : ""}
+        <button class="danger sm" data-cancel="${b.id}">Cancel</button></td></tr>`).join("")
+      : `<tr><td colspan="6"><div class="empty">No bookings on this day.</div></td></tr>`) + "</tbody>";
+  $$("[data-cancel]").forEach(btn => btn.onclick = async () => {
+    if (!confirm("Cancel this booking? Its door code stops working immediately and any payment is refunded in full.")) return;
+    try { const r = await api(`/api/admin/bookings/${btn.dataset.cancel}/cancel`, {});
+      toast(r.refund.amount ? `Cancelled · ${rupees(r.refund.amount)} refund started` : "Cancelled"); refresh(); } catch (e) { toast(e.message, true); }
+  });
+  $$("[data-paid]").forEach(btn => btn.onclick = () => markPaid(btn.dataset.paid));
+
+  $("#t-unpaid").innerHTML = o.unpaid.length ? `<table><tbody>${o.unpaid.map(b => `<tr><td class="who"><b>${esc(b.name)}</b><span>${b.phone} · ${esc(b.court)}</span></td>
+      <td class="small">${niceDate(b.start)} ${hhmm(b.start)}</td><td class="num"><b>${rupees(b.amount)}</b></td>
+      <td style="text-align:right"><button class="sm" data-paid="${b.id}">Mark paid</button></td></tr>`).join("")}</tbody></table>`
+    : `<div class="empty">Nothing owed.</div>`;
+  $$("#t-unpaid [data-paid]").forEach(btn => btn.onclick = () => markPaid(btn.dataset.paid));
+
+  $("#t-refunds").innerHTML = o.refunds.length ? `<table><tbody>${o.refunds.map(r => `<tr><td class="who"><b>${esc(r.name || r.kind)}</b><span>${r.phone || ""}${r.ref ? " · " + r.ref : ""}</span></td>
+      <td class="num"><b>${rupees(r.refund_amount)}</b></td>
+      <td>${r.refund_status === "manual" ? `<span class="pill warn">cash to hand back</span>` : r.refund_status === "failed" ? `<span class="pill bad" title="${esc(r.refund_error)}">gateway failed</span>` : `<span class="pill">retrying</span>`}</td>
+      <td style="text-align:right;white-space:normal">${r.refund_status === "failed" ? `<button class="sm ghost" data-retry="${r.id}">Retry</button> ` : ""}
+        ${r.refund_status !== "pending" ? `<button class="sm" data-done="${r.id}">Handed back</button>` : ""}</td></tr>`).join("")}</tbody></table>`
+    : `<div class="empty">No refunds waiting.</div>`;
+  $$("[data-retry]").forEach(b => b.onclick = async () => { await api(`/api/admin/refunds/${b.dataset.retry}/retry`, {}); refresh(); });
+  $$("[data-done]").forEach(b => b.onclick = async () => { await api(`/api/admin/refunds/${b.dataset.done}/done`, {}); toast("Refund marked done"); refresh(); });
+
+  $("#t-expiring").innerHTML = o.expiring.length ? `<table><tbody>${o.expiring.map(m => `<tr><td class="who"><b>${esc(m.name)}</b><span>${m.phone}</span></td>
+      <td class="small muted">${esc(m.plan)}</td><td style="text-align:right">${m.end_date === A.cfg.today ? `<span class="pill warn">ends today</span>` : `<span class="pill plain">${niceDate(m.end_date)}</span>`}</td></tr>`).join("")}</tbody></table>`
+    : `<div class="empty">None this week.</div>`;
+  $("#t-fees").innerHTML = o.fees_due.length ? `<table><tbody>${o.fees_due.map(f => `<tr><td class="who"><b>${esc(f.name)}</b><span>${f.phone} · ${esc(f.batch)}</span></td>
+      <td>${f.fee_paid_until < A.cfg.today ? `<span class="pill bad">overdue</span>` : `<span class="pill plain">${niceDate(f.fee_paid_until)}</span>`}</td>
+      <td style="text-align:right"><button class="sm ghost" data-fee="${f.id}">+1 month paid</button></td></tr>`).join("")}</tbody></table>`
+    : `<div class="empty">All paid up.</div>`;
+  $$("#t-fees [data-fee]").forEach(b => b.onclick = () => payFee(b.dataset.fee));
+}
+
+async function markPaid(id) {
+  try { await api(`/api/admin/bookings/${id}/mark-paid`, {}); toast("Payment recorded"); refresh(); } catch (e) { toast(e.message, true); }
+}
+const MODE_HINT = { unpaid: "For bookings taken over the phone. Confirmed right away, door code sent, nothing charged. Collect when they arrive.",
+  desk_paid: "Cash or UPI taken at the counter. Recorded as revenue now.", comp: "Free booking (coaching demo, sponsor, make-good). Not counted as revenue." };
+function setMode(m) { A.mode = m; $$("#w-mode button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m)); $("#w-hint").textContent = MODE_HINT[m]; }
+$$("#w-mode button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+$("#t-new").onclick = () => { $("#new-card").classList.remove("hidden"); $("#new-card").scrollIntoView({ behavior: "smooth", block: "center" }); $("#w-name").focus(); };
+$("#w-close").onclick = () => $("#new-card").classList.add("hidden");
+$("#w-go").onclick = async () => {
+  try {
+    const r = await api("/api/admin/bookings", { court_id: $("#w-court").value, date: $("#t-date").value, start: $("#w-start").value,
+      slots: +$("#w-slots").value, name: $("#w-name").value, phone: $("#w-phone").value, email: $("#w-email").value, mode: A.mode });
+    toast(`Booked ${r.booking.ref}. Confirmation and door code sent.`); $("#w-name").value = $("#w-phone").value = $("#w-email").value = "";
+    $("#new-card").classList.add("hidden"); refresh();
+  } catch (e) { toast(e.message, true); }
+};
+$("#k-go").onclick = async () => {
+  try { await api("/api/admin/blocks", { court_id: $("#k-court").value, date: $("#t-date").value, start: $("#k-start").value,
+      end: $("#k-end").value, reason: $("#k-reason").value }); toast("Court blocked"); }
+  catch (e) { toast(e.message, true); }
+};
+async function payFee(id) {
+  try { const r = await api("/api/admin/academy-fee", { enrollment_id: +id, months: 1 }); toast("Fees paid until " + niceDate(r.fee_paid_until)); refresh(); if (!$("[data-panel=people]").classList.contains("hidden")) loadPeople(); }
+  catch (e) { toast(e.message, true); }
+}
+
+// ---------------- people
+let qTimer;
+$("#p-q").oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(loadPeople, 250); };
+async function loadPeople() {
+  let q = $("#p-q").value.trim();
+  const idm = q.match(/^nr-?0*(\d+)$/i);
+  A.people = (await api("/api/admin/people?q=" + encodeURIComponent(idm ? "" : q))).people;
+  if (idm) A.people = A.people.filter(p => p.id === +idm[1]);
+  const planOpts = A.cat.plans.map(p => `<option value="${p.id}">${esc(p.name)} · ${rupees(p.price)}</option>`).join("");
+  const batchOpts = A.cat.batches.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join("");
+  const statePill = (st, text) => `<span class="pill ${st === "active" ? "ok" : st === "expired" ? "bad" : st === "upcoming" ? "plain" : "warn"}">${text}</span>`;
+  $("#p-table").innerHTML = `<thead><tr><th>Person</th><th>Membership</th><th>Academy</th><th>Door</th><th>Actions</th></tr></thead><tbody>` +
+    (A.people.length ? A.people.map(p => {
+      const m = p.memberships[0];
+      const mem = m ? `<div class="small"><b>${esc(m.plan)}</b></div>${statePill(m.state, m.state === "active" ? "to " + niceDate(m.end_date) : m.days_left === 0 ? "ends today" : m.state === "expired" ? "expired " + niceDate(m.end_date) : m.state === "upcoming" ? "from " + niceDate(m.start_date) : m.days_left + " days left")}` : `<span class="faint">—</span>`;
+      const ac = p.academy.map(a => `<div class="small"><b>${esc(a.batch)}</b></div><div class="row" style="gap:6px">${statePill(a.fee_state, "fees to " + niceDate(a.fee_paid_until))}
+        <button class="sm ghost" data-fee="${a.id}">+1 mo</button></div>`).join("") || `<span class="faint">—</span>`;
+      const fp = !p.lock_user_id ? `<span class="faint small">not enrolled</span>`
+        : `${p.access_until ? `<span class="pill ok">on</span>` : `<span class="pill bad">off</span>`}<div class="tiny faint">finger #${esc(p.lock_user_id)}</div>`;
+      return `<tr><td class="who"><b>${esc(p.name)}</b><span><code>${p.member_id}</code> · ${p.phone}${p.guardian_name ? " · guardian " + esc(p.guardian_name) : ""}</span></td>
+        <td>${mem}</td><td>${ac}</td><td>${fp}</td>
+        <td><div class="row" style="gap:6px;flex-wrap:nowrap">
+          <select data-plan="${p.id}" style="width:auto;padding:7px 10px;font-size:.82rem"><option value="">Sell / renew plan…</option>${planOpts}</select>
+          <select data-batch="${p.id}" style="width:auto;padding:7px 10px;font-size:.82rem"><option value="">Enroll…</option>${batchOpts}</select>
+          <button class="sm ghost" data-edit="${p.id}">Edit</button></div></td></tr>`;
+    }).join("") : `<tr><td colspan="5"><div class="empty">No one matches.</div></td></tr>`) + "</tbody>";
+  $$("[data-plan]").forEach(s => s.onchange = async () => {
+    if (!s.value) return;
+    const months = +prompt("How many periods of this plan? (paid at the desk)", "1") || 0;
+    if (!months) { s.value = ""; return; }
+    try { const r = await api("/api/admin/memberships", { user_id: +s.dataset.plan, plan_id: +s.value, months });
+      toast(`Plan runs ${niceDate(r.membership.start_date)} → ${niceDate(r.membership.end_date)}`); loadPeople(); refresh(); }
+    catch (e) { toast(e.message, true); }
+  });
+  $$("[data-batch]").forEach(s => s.onchange = async () => {
+    if (!s.value) return;
+    try { await api("/api/admin/enroll", { user_id: +s.dataset.batch, batch_id: +s.value, months: 1 }); toast("Enrolled, first month paid"); loadPeople(); }
+    catch (e) { toast(e.message, true); }
+  });
+  $$("#p-table [data-fee]").forEach(b => b.onclick = () => payFee(b.dataset.fee));
+  $$("[data-edit]").forEach(b => b.onclick = () => openForm(A.people.find(p => p.id === +b.dataset.edit)));
+}
+function openForm(p) {
+  A.editing = p || null;
+  $("#p-form-h").textContent = p ? "Edit " + p.name : "Add person";
+  $("#pf-name").value = p?.name || ""; $("#pf-phone").value = p?.phone || ""; $("#pf-email").value = p?.email || "";
+  $("#pf-lock").value = p?.lock_user_id || ""; $("#pf-guardian").value = p?.guardian_name || "";
+  $("#pf-sms").checked = p ? !!p.sms_opt : true; $("#pf-wa").checked = p ? !!p.wa_opt : true;
+  $("#p-form").classList.remove("hidden"); $("#pf-name").focus();
+}
+$("#p-new").onclick = () => openForm(null);
+$("#pf-cancel").onclick = () => $("#p-form").classList.add("hidden");
+$("#pf-save").onclick = async () => {
+  try {
+    await api("/api/admin/people", { name: $("#pf-name").value, phone: $("#pf-phone").value, email: $("#pf-email").value,
+      lock_user_id: $("#pf-lock").value, guardian_name: $("#pf-guardian").value, sms_opt: $("#pf-sms").checked, wa_opt: $("#pf-wa").checked });
+    toast("Saved"); $("#p-form").classList.add("hidden"); loadPeople();
+  } catch (e) { toast(e.message, true); }
+};
+
+// ---------------- analytics
+function barChart(el, data, { fmt = v => v, height = 220, tickFmt, labelEvery = 1 } = {}) {
+  const W = Math.max(320, el.clientWidth || 700), H = height, padL = 52, padB = 26, padT = 8;
+  const max = Math.max(1, ...data.map(d => d.value));
+  const step = niceStep(max), top = Math.ceil(max / step) * step;
+  const bw = (W - padL) / data.length, gap = Math.min(6, Math.max(2, bw * .22));
+  const y = v => padT + (H - padT - padB) * (1 - v / top);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(el.dataset.label || "chart")}">`;
+  for (let v = 0; v <= top + 1e-9; v += step)
+    s += `<line class="gridline" x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text class="axis" x="${padL - 8}" y="${y(v) + 4}" text-anchor="end">${(tickFmt || fmt)(v)}</text>`;
+  data.forEach((d, i) => {
+    const x = padL + i * bw + gap / 2, w = Math.max(1, bw - gap), h = Math.max(0, (H - padT - padB) - (y(d.value) - padT)), yy = y(d.value), r = Math.min(4, w / 2, h);
+    const path = h > 0 ? `M${x},${yy + h} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + w - r} Q${x + w},${yy} ${x + w},${yy + r} V${yy + h} Z` : "";
+    s += `<rect class="hit" x="${padL + i * bw}" y="${padT}" width="${bw}" height="${H - padT - padB}" data-i="${i}"/>`;
+    s += `<path class="bar-mark" d="${path}"/>`;
+    if (i % labelEvery === 0) s += `<text class="axis" x="${x + w / 2}" y="${H - 8}" text-anchor="middle">${esc(d.label)}</text>`;
+  });
+  el.innerHTML = s + "</svg>";
+  const tip = document.createElement("div"); tip.className = "tip hidden"; el.append(tip);
+  $$(".hit", el).forEach(h => {
+    h.onmouseenter = () => { const d = data[+h.dataset.i], bb = h.getBoundingClientRect(), eb = el.getBoundingClientRect();
+      tip.innerHTML = `${fmt(d.value)}<span>${esc(d.tip || d.label)}</span>`; tip.classList.remove("hidden");
+      tip.style.left = (bb.left - eb.left + bb.width / 2) + "px"; tip.style.top = (y(d.value) * eb.width / W) + "px";
+      h.nextElementSibling.classList.add("hl"); };
+    h.onmouseleave = () => { tip.classList.add("hidden"); h.nextElementSibling.classList.remove("hl"); };
+  });
+}
+function niceStep(max) { const raw = max / 4, p = 10 ** Math.floor(Math.log10(raw)), n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+const kfmt = v => v >= 100000 ? "₹" + (v / 100000).toFixed(v % 100000 ? 1 : 0) + "L" : v >= 1000 ? "₹" + Math.round(v / 1000) + "k" : "₹" + v;
+
+$$("#an-range button").forEach(b => b.onclick = () => { A.days = +b.dataset.d; $$("#an-range button").forEach(x => x.setAttribute("aria-pressed", x === b)); loadAnalytics(); });
+async function loadAnalytics() {
+  const r = await api("/api/admin/analytics?days=" + A.days), m = r.money, bk = r.bookings, mem = r.members;
+  $("#an-kpis").innerHTML = [
+    ["Net revenue", rupees(m.net), `${rupees(m.gross)} in · ${rupees(m.refunded)} refunded`],
+    ["Collected online", rupees(m.online), `${m.gross ? Math.round(100 * m.online / m.gross) : 0}% of all money in`],
+    ["Court bookings", bk.confirmed.toLocaleString("en-IN"), `${bk.cancel_rate}% cancelled`],
+    ["Active members", mem.active, `${mem.new} joined/renewed · ${mem.lapsed} lapsed`],
+  ].map(([l, v, s]) => `<div class="card stat"><span class="label">${l}</span><b>${v}</b><span class="sub">${s}</span></div>`).join("");
+  $("#an-daily-sub").textContent = `${niceDate(r.range.from)} – ${niceDate(r.range.to)} · all sources, before refunds`;
+  const every = r.daily.length > 45 ? 14 : r.daily.length > 14 ? 5 : 1;
+  barChart($("#an-daily"), r.daily.map(d => ({ label: d.date.slice(8), value: d.collected, tip: niceDate(d.date) + (d.refunded ? ` · ${rupees(d.refunded)} refunded` : "") })),
+    { fmt: rupees, tickFmt: kfmt, labelEvery: every });
+  $("#an-insights").innerHTML = r.insights.map(i => `<div class="insight ${i.tone}"><span class="dot">${i.tone === "good" ? "✓" : "!"}</span><div>${esc(i.text)}</div></div>`).join("")
+    || `<div class="empty">Not enough data yet.</div>`;
+  const parts = [["Court bookings", m.courts], ["Memberships", m.memberships], ["Academy fees", m.academy]], tot = Math.max(1, m.gross);
+  $("#an-split").innerHTML = parts.map(([l, v]) => `<div class="hbar"><span>${l}</span><div class="track"><i style="width:${100 * v / tot}%"></i></div><b class="num" style="text-align:right">${kfmt(v)}</b></div>`).join("")
+    + `<p class="small muted" style="margin:8px 0 0">Also: ${rupees(m.unpaid_reservations)} owed on ${m.unpaid_count} phone reservation(s) · ${rupees(m.refunds_open)} in refunds waiting.</p>`;
+  $("#an-sport").innerHTML = `<thead><tr><th>Sport</th><th>Hours</th><th>Booked</th><th>Revenue</th><th>Per hour</th></tr></thead><tbody>` +
+    r.by_sport.map(s => `<tr><td><b style="color:var(--${s.sport})">●</b> ${SPORT_LABEL[s.sport]}</td><td class="num">${Math.round(s.booked_hours)}</td>
+      <td class="num">${s.utilization}%</td><td class="num"><b>${rupees(s.revenue)}</b></td><td class="num">${rupees(s.per_court_hour)}</td></tr>`).join("") + "</tbody>";
+  $("#an-courts").innerHTML = r.courts.map(c => `<div class="hbar"><span>${esc(c.court)}</span><div class="track" title="${c.booked_hours}h booked, ${c.academy_hours}h academy">
+      <i style="width:${c.booked_pct}%"></i>${c.academy_hours ? `<i class="acad" style="width:${Math.round(100 * c.academy_hours / c.open_hours)}%"></i>` : ""}</div>
+      <b class="num" style="text-align:right">${c.utilization}%</b></div>`).join("");
+  barChart($("#an-hours"), r.by_hour.map(h => ({ label: String(h.hour).padStart(2, "0"), value: h.pct, tip: `${String(h.hour).padStart(2, "0")}:00` })),
+    { fmt: v => v + "%", height: 200, labelEvery: 2 });
+  $("#an-members").innerHTML = [
+    ["Active members", mem.active], ["New / renewed", mem.new], ["Bought online", mem.new_online], ["Renewals", mem.renewals],
+    ["Lapsed", mem.lapsed], ["Expiring in 7 days", mem.expiring_7d], ["Academy players", mem.academy_players], ["Fees overdue", mem.fees_overdue],
+  ].map(([l, v]) => `<div class="stat"><span class="label">${l}</span><b>${v}</b></div>`).join("");
+}
+window.addEventListener("resize", () => { if (!$("[data-panel=analytics]").classList.contains("hidden")) loadAnalytics(); });
+
+// ---------------- health
+const HICON = { ok: ["ok", "✓"], warn: ["warn", "!"], bad: ["bad", "✕"] };
+async function loadHealth() {
+  const r = await api("/api/admin/health");
+  $("#h-time").textContent = "Checked " + hhmm(r.now);
+  const n = s => r.checks.filter(c => c.status === s).length;
+  $("#h-sum").innerHTML = [["Working", n("ok"), "ok"], ["Needs attention", n("warn"), "warn"], ["Broken", n("bad"), "bad"]]
+    .map(([l, v, t]) => `<div class="card stat"><span class="label">${l}</span><b style="color:var(--${t})">${v}</b></div>`).join("");
+  $("#h-list").innerHTML = r.checks.map(c => `<div class="health-row"><div class="insight ${c.status === "ok" ? "good" : c.status}" style="padding:0;border:0"><span class="dot">${HICON[c.status][1]}</span></div>
+    <b>${esc(c.area)}</b><div class="what">${esc(c.summary)}${c.fix ? `<div class="fix">→ ${esc(c.fix)}</div>` : ""}</div></div>`).join("");
+}
+$("#h-refresh").onclick = loadHealth;
+$("#h-reset").onclick = async () => {
+  if (!confirm("Reset all demo data? Every booking, member and message is replaced with fresh demo data.")) return;
+  try { await api("/api/admin/demo-reset", {}); toast("Demo data reset"); refresh(); loadHealth(); } catch (e) { toast(e.message, true); }
+};
+
+// ---------------- door
+function renderDoor() {
+  const o = A.ov;
+  $("#d-prov").innerHTML = "<tbody>" + Object.entries(o.providers).map(([k, v]) =>
+    `<tr><td class="muted">${k}</td><td style="text-align:right">${v === "console" || v === "mock" ? `<span class="pill warn">${v} (demo)</span>` : `<span class="pill ok">${esc(v)}</span>`}</td></tr>`).join("") + "</tbody>";
+  $("#d-log").innerHTML = `<thead><tr><th>When</th><th>How</th><th>Who</th><th>Result</th><th>Detail</th></tr></thead><tbody>` +
+    (o.access.length ? o.access.map(a => `<tr><td class="num">${niceDate(a.at)} <span class="faint">${hhmm(a.at)}</span></td><td>${esc(a.method)}</td>
+      <td>${esc(a.name || (a.ref ? "booking " + a.ref : "—"))}</td>
+      <td>${a.granted ? `<span class="pill ok">opened</span>` : `<span class="pill bad">denied</span>`}</td>
+      <td class="small muted">${esc(a.detail)} · ${esc(a.device_id || "")}</td></tr>`).join("")
+      : `<tr><td colspan="5"><div class="empty">No door activity yet.</div></td></tr>`) + "</tbody>";
+}
+async function tryDoor(body) {
+  try {
+    const r = await api("/api/admin/simulate-door", body);
+    $("#d-result").innerHTML = r.open ? `<div class="demo-hint" style="background:color-mix(in srgb,var(--ok) 14%,transparent);border-color:transparent"><b>Door opens</b> · ${esc(r.reason)}</div>`
+      : `<div class="demo-hint" style="background:color-mix(in srgb,var(--bad) 12%,transparent);border-color:transparent"><b>Stays locked</b> · ${esc(r.reason)}</div>`;
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+$("#d-code-go").onclick = () => tryDoor({ code: $("#d-code").value });
+$("#d-fp-go").onclick = () => tryDoor({ fingerprint_user_id: $("#d-fp").value });
+$("#d-tick").onclick = async () => { await api("/api/admin/tick", {}); toast("Automation ran"); refresh(); };
+$("#d-rem").onclick = async () => { const r = await api("/api/admin/run-reminders", {}); toast(r.sent.length ? `${r.sent.length} reminder(s) processed` : "Nothing due"); refresh(); };
+
+function renderMsgs() {
+  const n = A.ov.notifications;
+  $("#m-log").innerHTML = `<thead><tr><th>When</th><th>To</th><th>Channel</th><th>Type</th><th>Message</th><th></th></tr></thead><tbody>` +
+    (n.length ? n.map(m => `<tr><td class="small num">${niceDate(m.created_at)} <span class="faint">${hhmm(m.created_at)}</span></td><td class="num">${m.to_phone}</td>
+      <td>${m.channel === "whatsapp" ? "WhatsApp" : "SMS"}</td><td class="small">${esc(m.kind.replace(/_/g, " "))}</td>
+      <td class="small" style="max-width:420px">${esc(m.body)}</td><td>${m.status === "sent" ? `<span class="pill ok">sent</span>` : `<span class="pill bad" title="${esc(m.error)}">${esc(m.status)}</span>`}</td></tr>`).join("")
+      : `<tr><td colspan="6"><div class="empty">No messages yet.</div></td></tr>`) + "</tbody>";
+}
+
+boot().then(() => { const t = location.hash.slice(1); if (TABS[t] && !$("#app").classList.contains("hidden")) openTab(t); })
+  .catch(e => toast(e.message, true));
+</script>
+</body>
+</html>
