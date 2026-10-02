@@ -22,6 +22,7 @@ PARAMS = {
     "booking_cancelled": ["name", "ref", "court", "when", "refund"],
     "refund_issued": ["amount", "what", "days"],
     "membership_confirmed": ["name", "plan", "end_date", "access"],
+    "welcome_coupon": ["name", "pct", "code"],
 }
 
 TEXT = {
@@ -37,6 +38,8 @@ TEXT = {
     "booking_cancelled": "Hi {name}, booking {ref} ({court}, {when}) is cancelled. {refund}",
     "refund_issued": "{amount} has been refunded for {what}. It reaches your account in {days}.",
     "membership_confirmed": "Hi {name}, your {plan} is active until {end_date}. {access}",
+    "welcome_coupon": "Welcome to " + config.FACILITY_NAME + ", {name}! Here's {pct}% off your next court booking "
+    "(badminton, pickleball or padel): use code {code} at " + config.PUBLIC_URL + " with this mobile number.",
 }
 
 

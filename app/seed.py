@@ -89,6 +89,11 @@ def _rich(c, today, core_ids):
         ("Aditya Nair", "9000000013", "113", 1, -27, 2), ("Priya Menon", "9000000014", "114", 4, -8, 21),
         ("Farhan Sheikh", "9000000015", "115", 5, -36, -7), ("Neha Gupta", "9000000016", None, 6, -2, 27),
         ("Varun Iyer", "9000000017", "117", 3, -55, -26), ("Kavya Reddy", "9000000018", "118", 2, -70, 19),
+        # evening badminton regulars (fill the 7 PM members' slot)
+        ("Sanjay Kulkarni", "9000000031", "131", 1, -10, 20), ("Ritu Agarwal", "9000000032", "132", 2, -30, 60),
+        ("Manish Tiwari", "9000000033", "133", 1, -15, 15), ("Lakshmi Iyer", "9000000034", "134", 1, -3, 27),
+        ("Gaurav Bhatia", "9000000035", "135", 2, -60, 30), ("Harsh Vardhan", "9000000036", "136", 1, -20, 10),
+        ("Pallavi Deshmukh", "9000000037", "137", 1, -6, 24),
     ]
     member_ids = list(core_ids[:3])
     for name, phone, lock, plan, s0, e0 in extra:
@@ -103,6 +108,40 @@ def _rich(c, today, core_ids):
                   "VALUES('membership',?,?,?,?,?,?,'paid',?,?)",
                   (mid, uid, phone, price, provider, f"DEMO-M{mid}", at(s0, 11), at(s0, 11)))
         member_ids.append(uid)
+
+    # ---- badminton members' daily slots. 7 PM is full (6 + 6), with three people waiting; Farhan's
+    # plan ended a week ago, so the first scheduler tick frees his place and suggests the next in line.
+    # 6 AM has room: Court 2 is the morning academy's, so only Court 1 (6 places) is open to members.
+    uid_of = lambda phone: c.execute("SELECT id FROM users WHERE phone=?", (phone,)).fetchone()[0]
+    for court, time, phones in [
+        ("B1", "19:00", ["9000000015", "9000000001", "9000000012", "9000000013", "9000000011", "9000000018"]),
+        ("B2", "19:00", ["9000000016", "9000000031", "9000000032", "9000000033", "9000000034", "9000000035"]),
+        ("B1", "06:00", ["9000000002", "9000000036", "9000000037"]),
+    ]:
+        for phone in phones:
+            c.execute("INSERT INTO member_slots(user_id,court_id,start_time,created_at) VALUES(?,?,?,?)",
+                      (uid_of(phone), court, time, at(-20, 11)))
+    for name, phone, time, note, ago in [
+        ("Rakesh Jain", "9822200001", "19:00", "Plays with his son, wants evenings", 9),
+        ("Swati Bhosale", "9822200002", "19:00", "Called twice", 6),
+        ("Imran Qureshi", "9822200003", "19:00", None, 2),
+        ("Anjali Nair", "9822200004", "06:00", "Prefers early mornings", 1),
+    ]:
+        c.execute("INSERT INTO enquiries(name,phone,start_time,note,created_by,created_at) VALUES(?,?,?,?,?,?)",
+                  (name, phone, time, note, "Front Desk", at(-ago, 12)))
+
+    # ---- a guest who booked a court, then created an account: their welcome coupon is waiting
+    sneha = c.execute("INSERT INTO users(name,phone,email,created_at) VALUES('Sneha Patil','9811100002',"
+                      "'sneha@example.com',?)", (at(-1, 21),)).lastrowid
+    code = "WELCOME-" + "".join(rnd.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(5))
+    c.execute("INSERT INTO coupons(code,user_id,phone,pct,created_at) VALUES(?,?,?,?,?)",
+              (code, sneha, "9811100002", config.WELCOME_COUPON_PCT, at(-1, 21)))
+    for ch in ("sms", "whatsapp"):
+        c.execute("INSERT INTO notifications(kind,channel,to_phone,body,status,created_at) "
+                  "VALUES('welcome_coupon',?,'9811100002',?,'sent',?)",
+                  (ch, f"Welcome to {config.FACILITY_NAME}, Sneha! Here's {config.WELCOME_COUPON_PCT}% off your next "
+                   f"court booking (badminton, pickleball or padel): use code {code} at {config.PUBLIC_URL} "
+                   f"with this mobile number.", at(-1, 21)))
 
     # ---- academy: two more batches, more players
     b_morning = c.execute(
@@ -141,7 +180,7 @@ def _rich(c, today, core_ids):
         (1, 21, "B2", "Vikram Singh", "9811100005", "unpaid", "phone"),
         (1, 19, "P1", "Ananya Bose", "9811100006", "paid", "online"),
         (1, 20, "K1", "Coach Daniel (demo class)", "9811100007", "comp", "desk"),
-        (2, 19, "B1", "Karan Mehra", "9811100008", "paid", "online"),
+        (2, 21, "B1", "Karan Mehra", "9811100008", "paid", "online"),
         (2, 20, "P1", "Pooja Iyer", "9811100009", "paid", "online"),
         (3, 21, "K2", "Nikhil Rao", "9811100010", "paid", "desk"),
     ]

@@ -124,6 +124,8 @@ def verify_login_code(phone, code, name=None):
         uid = db.conn().execute("INSERT INTO users(name,phone,created_at) VALUES(?,?,?)",
                                 (name.strip()[:80], phone, clock.fmt(clock.now()))).lastrowid
         db.conn().execute("UPDATE bookings SET user_id=? WHERE phone=? AND user_id IS NULL", (uid, phone))
+        from . import coupons
+        coupons.issue_welcome(uid)  # registering for the first time: % off their next court booking
         return new_session(uid)
     return new_session(user["id"])
 

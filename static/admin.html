@@ -24,6 +24,7 @@
     <a class="logo" href="/admin"><i></i><span id="facility">NetRush</span><small>admin</small></a>
     <button role="tab" data-tab="today" aria-selected="true"></button>
     <button role="tab" data-tab="people" aria-selected="false"></button>
+    <button role="tab" data-tab="slots" aria-selected="false"></button>
     <button role="tab" data-tab="analytics" aria-selected="false"></button>
     <button role="tab" data-tab="health" aria-selected="false"></button>
     <button role="tab" data-tab="door" aria-selected="false"></button>
@@ -37,6 +38,7 @@
       <div class="page-head"><div><div class="eyebrow">Front desk</div><h1 style="margin-top:4px" id="t-title">Today</h1></div>
         <span class="spacer"></span><input type="date" id="t-date" style="width:auto"></div>
       <div class="stats4" id="t-stats"></div>
+      <div class="card hidden" id="t-openings"></div>
       <div class="card"><div class="section-head"><h2>Bookings</h2><span class="spacer"></span>
         <button class="sm" id="t-new">+ New booking</button></div>
         <div class="table-scroll"><table id="t-bookings"></table></div></div>
@@ -95,6 +97,32 @@
         <div class="row" style="margin-top:14px"><button id="pf-save">Save</button><button class="ghost" id="pf-cancel">Cancel</button></div>
       </div>
       <div class="card"><div class="table-scroll"><table id="p-table"></table></div></div>
+    </section>
+
+    <!-- MEMBER SLOTS -->
+    <section data-panel="slots" class="stack hidden">
+      <div class="page-head"><div><div class="eyebrow">Badminton</div><h1 style="margin-top:4px">Member slots &amp; enquiries</h1></div>
+        <span class="spacer"></span><button id="s-new">+ Add enquiry</button></div>
+      <p class="small muted" style="margin:-6px 0 0" id="s-rule"></p>
+      <div class="card hidden" id="s-form">
+        <h2>New enquiry</h2>
+        <p class="small muted">Someone asking for a members' slot. If it's full they go on the priority list; when a place opens they're suggested here with a message ready to send.</p>
+        <div class="grid3" style="gap:12px">
+          <div><label>Name</label><input id="sf-name"></div>
+          <div><label>Mobile</label><input id="sf-phone" inputmode="tel"></div>
+          <div><label>Slot they want</label><select id="sf-time"></select></div>
+          <div style="grid-column:1/-1"><label>Note (optional)</label><input id="sf-note" placeholder="e.g. can also do 8 PM"></div>
+        </div>
+        <div class="row" style="margin-top:14px"><button id="sf-save">Add to list</button><button class="ghost" id="sf-cancel">Cancel</button></div>
+      </div>
+      <div class="card hidden" id="s-sugg"></div>
+      <div class="card"><div class="section-head"><h2>Slots</h2><span class="spacer"></span>
+        <label class="check small"><input type="checkbox" id="s-all"> Show empty times</label></div>
+        <div class="table-scroll"><table id="s-table"></table></div></div>
+      <div class="grid2">
+        <div class="card"><h2>Places freed recently</h2><div id="s-freed"></div></div>
+        <div class="card"><h2>Closed enquiries</h2><div id="s-closed"></div></div>
+      </div>
     </section>
 
     <!-- ANALYTICS -->
@@ -160,9 +188,13 @@
 <script src="/common.js"></script>
 <script>
 const A = { cfg: null, cat: null, ov: null, people: [], editing: null, mode: "unpaid", days: 30 };
-const TABS = { today: ["today", "Today"], people: ["people", "Members & academy"], analytics: ["chart", "Analytics"],
-  health: ["pulse", "Health"], door: ["door", "Door"], msgs: ["chat", "Messages"] };
+const TABS = { today: ["today", "Today"], people: ["people", "Members & academy"], slots: ["slots", "Member slots"],
+  analytics: ["chart", "Analytics"], health: ["pulse", "Health"], door: ["door", "Door"], msgs: ["chat", "Messages"] };
 $$(".side button").forEach(b => b.innerHTML = ICON[TABS[b.dataset.tab][0]] + TABS[b.dataset.tab][1]);
+function slotBadge(n) {   // "Member slots" tab shows how many people have a place waiting to be offered
+  const b = $(".side [data-tab=slots]");
+  b.innerHTML = ICON.slots + "Member slots" + (n ? ` <span class="pill warn" style="margin-left:auto">${n}</span>` : "");
+}
 
 async function boot() {
   A.cfg = await api("/api/config");
@@ -195,6 +227,7 @@ function openTab(tab) {
   $$(".side button").forEach(x => x.setAttribute("aria-selected", x.dataset.tab === tab));
   $$("[data-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.panel !== tab));
   if (tab === "people") loadPeople();
+  if (tab === "slots") loadSlots();
   if (tab === "analytics") loadAnalytics();
   if (tab === "health") loadHealth();
   history.replaceState(null, "", "#" + tab);
@@ -223,11 +256,21 @@ function renderToday() {
     ["Renewals due", o.expiring.length + o.fees_due.length, "members + academy, 7 days"],
   ].map(([l, v, s]) => `<div class="card stat"><span class="label">${l}</span><b>${v}</b><span class="sub">${s}</span></div>`).join("");
 
+  const op = o.slot_openings;
+  slotBadge(op.length);
+  $("#t-openings").classList.toggle("hidden", !op.length);
+  $("#t-openings").innerHTML = op.length ? `<div class="section-head"><div><h2>Places open in members' slots</h2>
+      <p class="small muted" style="margin:0">Next in line on the priority list. A WhatsApp message is drafted for each.</p></div>
+      <span class="spacer"></span><button class="sm lime" id="t-op-go">Offer places →</button></div>
+      <table><tbody>${op.map(e => `<tr><td class="who"><b>${esc(e.name)}</b><span>${e.phone}</span></td>
+        <td><span class="pill plain">${esc(e.label)}</span></td><td class="small muted">#${e.position} in line</td></tr>`).join("")}</tbody></table>` : "";
+  if (op.length) $("#t-op-go").onclick = () => openTab("slots");
+
   $("#t-bookings").innerHTML = `<thead><tr><th>Time</th><th>Court</th><th>Customer</th><th>Payment</th><th>Door code</th><th></th></tr></thead><tbody>` +
     (o.bookings.length ? o.bookings.map(b => `<tr>
       <td class="num"><b>${hhmm(b.start)}</b><span class="faint">–${hhmm(b.end)}</span></td><td>${esc(b.court)}</td>
       <td class="who"><b>${esc(b.name)}</b><span>${b.phone}${b.email ? " · " + esc(b.email) : ""} · ${b.ref}</span></td>
-      <td>${payPill(b)}<div class="tiny faint" style="margin-top:4px">${rupees(b.amount)} · ${SRC[b.source] || b.source}</div></td>
+      <td>${payPill(b)}<div class="tiny faint" style="margin-top:4px">${rupees(b.amount)} · ${SRC[b.source] || b.source}${b.discount ? ` · <span title="${esc(b.coupon_code)}">coupon −${rupees(b.discount)}</span>` : ""}</div></td>
       <td>${b.code ? `<code class="big">${b.code}</code><div class="tiny faint">${esc(b.code_status)} · used ${b.uses}×</div>` : `<span class="faint small">after payment</span>`}</td>
       <td style="text-align:right;white-space:nowrap">${b.pay_status === "unpaid" && b.status === "confirmed" ? `<button class="sm" data-paid="${b.id}">Mark paid</button> ` : ""}
         <button class="danger sm" data-cancel="${b.id}">Cancel</button></td></tr>`).join("")
@@ -299,13 +342,17 @@ async function loadPeople() {
   const idm = q.match(/^nr-?0*(\d+)$/i);
   A.people = (await api("/api/admin/people?q=" + encodeURIComponent(idm ? "" : q))).people;
   if (idm) A.people = A.people.filter(p => p.id === +idm[1]);
+  A.board = await api("/api/admin/slots");
+  const slotOpts = A.board.slots.filter(s => s.capacity).map(s => `<option value="${s.start_time}">${esc(s.label)} · ${s.free ? s.free + " free" : "full"}</option>`).join("");
   const planOpts = A.cat.plans.map(p => `<option value="${p.id}">${esc(p.name)} · ${rupees(p.price)}</option>`).join("");
   const batchOpts = A.cat.batches.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join("");
   const statePill = (st, text) => `<span class="pill ${st === "active" ? "ok" : st === "expired" ? "bad" : st === "upcoming" ? "plain" : "warn"}">${text}</span>`;
   $("#p-table").innerHTML = `<thead><tr><th>Person</th><th>Membership</th><th>Academy</th><th>Door</th><th>Actions</th></tr></thead><tbody>` +
     (A.people.length ? A.people.map(p => {
       const m = p.memberships[0];
-      const mem = m ? `<div class="small"><b>${esc(m.plan)}</b></div>${statePill(m.state, m.state === "active" ? "to " + niceDate(m.end_date) : m.days_left === 0 ? "ends today" : m.state === "expired" ? "expired " + niceDate(m.end_date) : m.state === "upcoming" ? "from " + niceDate(m.start_date) : m.days_left + " days left")}` : `<span class="faint">—</span>`;
+      const mem = (m ? `<div class="small"><b>${esc(m.plan)}</b></div>${statePill(m.state, m.state === "active" ? "to " + niceDate(m.end_date) : m.days_left === 0 ? "ends today" : m.state === "expired" ? "expired " + niceDate(m.end_date) : m.state === "upcoming" ? "from " + niceDate(m.start_date) : m.days_left + " days left")}` : `<span class="faint">—</span>`)
+        + (p.slot ? `<div class="row tiny" style="gap:6px;margin-top:6px"><span class="pill plain">🏸 ${esc(p.slot.label)} · ${esc(p.slot.court_id)}</span>
+            <a href="#" data-unslot="${p.slot.id}" data-name="${esc(p.name)}">remove</a></div>` : "");
       const ac = p.academy.map(a => `<div class="small"><b>${esc(a.batch)}</b></div><div class="row" style="gap:6px">${statePill(a.fee_state, "fees to " + niceDate(a.fee_paid_until))}
         <button class="sm ghost" data-fee="${a.id}">+1 mo</button></div>`).join("") || `<span class="faint">—</span>`;
       const fp = !p.lock_user_id ? `<span class="faint small">not enrolled</span>`
@@ -314,6 +361,7 @@ async function loadPeople() {
         <td>${mem}</td><td>${ac}</td><td>${fp}</td>
         <td><div class="row" style="gap:6px;flex-wrap:nowrap">
           <select data-plan="${p.id}" style="width:auto;padding:7px 10px;font-size:.82rem"><option value="">Sell / renew plan…</option>${planOpts}</select>
+          ${p.slot_ok ? `<select data-slot="${p.id}" style="width:auto;padding:7px 10px;font-size:.82rem"><option value="">${p.slot ? "Move slot…" : "Daily slot…"}</option>${slotOpts}</select>` : ""}
           <select data-batch="${p.id}" style="width:auto;padding:7px 10px;font-size:.82rem"><option value="">Enroll…</option>${batchOpts}</select>
           <button class="sm ghost" data-edit="${p.id}">Edit</button></div></td></tr>`;
     }).join("") : `<tr><td colspan="5"><div class="empty">No one matches.</div></td></tr>`) + "</tbody>";
@@ -330,6 +378,15 @@ async function loadPeople() {
     try { await api("/api/admin/enroll", { user_id: +s.dataset.batch, batch_id: +s.value, months: 1 }); toast("Enrolled, first month paid"); loadPeople(); }
     catch (e) { toast(e.message, true); }
   });
+  $$("[data-slot]").forEach(s => s.onchange = async () => {
+    if (!s.value) return;
+    try { const r = await api("/api/admin/slots", { user_id: +s.dataset.slot, start_time: s.value });
+      toast(`In the ${r.slot.label} slot on ${r.slot.court}`);
+      if (r.warnings.length) alert(`${r.slot.court} is now reserved for members at ${r.slot.label}, but these public bookings were already made:\n\n${r.warnings.join("\n")}`);
+      loadPeople(); refresh(); }
+    catch (e) { toast(e.message, true); s.value = ""; }
+  });
+  $$("#p-table [data-unslot]").forEach(a => a.onclick = e => { e.preventDefault(); releaseSlot(a.dataset.unslot, a.dataset.name, loadPeople); });
   $$("#p-table [data-fee]").forEach(b => b.onclick = () => payFee(b.dataset.fee));
   $$("[data-edit]").forEach(b => b.onclick = () => openForm(A.people.find(p => p.id === +b.dataset.edit)));
 }
@@ -345,9 +402,85 @@ $("#p-new").onclick = () => openForm(null);
 $("#pf-cancel").onclick = () => $("#p-form").classList.add("hidden");
 $("#pf-save").onclick = async () => {
   try {
-    await api("/api/admin/people", { name: $("#pf-name").value, phone: $("#pf-phone").value, email: $("#pf-email").value,
+    const r = await api("/api/admin/people", { name: $("#pf-name").value, phone: $("#pf-phone").value, email: $("#pf-email").value,
       lock_user_id: $("#pf-lock").value, guardian_name: $("#pf-guardian").value, sms_opt: $("#pf-sms").checked, wa_opt: $("#pf-wa").checked });
-    toast("Saved"); $("#p-form").classList.add("hidden"); loadPeople();
+    toast(r.welcome_coupon ? `Saved. Welcome coupon ${r.welcome_coupon} (${A.cfg.welcome_coupon_pct}% off next booking) sent to them.` : "Saved"); $("#p-form").classList.add("hidden"); loadPeople();
+  } catch (e) { toast(e.message, true); }
+};
+
+// ---------------- member slots & enquiries
+async function releaseSlot(id, name, after) {
+  if (!confirm(`Take ${name} out of their daily slot? Their place goes to the next person on the priority list.`)) return;
+  try { await api(`/api/admin/slots/${id}/release`, {}); toast("Place freed"); after && after(); refresh(); } catch (e) { toast(e.message, true); }
+}
+async function setEnquiry(id, status, msg) {
+  try { await api(`/api/admin/enquiries/${id}`, { status }); if (msg) toast(msg); loadSlots(); refresh(); } catch (e) { toast(e.message, true); }
+}
+const courtBar = (n, cap) => `<span class="meter" style="display:inline-block;width:70px;height:7px;margin:0 6px;vertical-align:middle">
+  <i style="width:${100 * n / cap}%"></i></span>`;
+
+async function loadSlots() {
+  const B = A.board = await api("/api/admin/slots"), cap = B.capacity_per_court;
+  $("#s-rule").textContent = `Up to ${cap} members per court per slot. A court with members on it is closed to public booking at that hour. Courts fill one at a time.`;
+  $("#sf-time").innerHTML = B.slots.filter(s => s.capacity).map(s => `<option value="${s.start_time}" ${s.start_time === "19:00" ? "selected" : ""}>${esc(s.label)} · ${s.free ? s.free + " place" + (s.free > 1 ? "s" : "") + " free" : "full"}</option>`).join("");
+  slotBadge(B.suggestions.length);
+
+  $("#s-sugg").classList.toggle("hidden", !B.suggestions.length);
+  $("#s-sugg").innerHTML = `<div class="section-head"><div><h2>Places open: offer them</h2>
+      <p class="small muted" style="margin:0">Next in line for each slot with a free place. Send the drafted message, then mark what they say.</p></div></div>` +
+    B.suggestions.map(e => `<div style="padding:14px 0;border-top:1px solid var(--line)">
+      <div class="row"><div class="who"><b>${esc(e.name)}</b> <span class="small muted">${e.phone} · #${e.position} in line for <b>${esc(e.label)}</b> · asked ${niceDate(e.created_at)}${e.note ? " · " + esc(e.note) : ""}</span></div></div>
+      <div class="demo-hint" style="margin:10px 0;white-space:pre-wrap">${esc(e.text)}</div>
+      <div class="row" style="gap:8px"><a class="btn lime sm" href="${esc(e.whatsapp)}" target="_blank" rel="noopener" data-offer="${e.id}">Send on WhatsApp</a>
+        <button class="sm ghost" data-copy="${e.id}">Copy message</button><span class="spacer"></span>
+        <button class="sm ghost" data-skip="${e.id}">Remove from list</button></div></div>`).join("");
+  $$("#s-sugg [data-offer]").forEach(a => a.onclick = () => setEnquiry(a.dataset.offer, "offered", "Marked as offered. Their place is held until you mark joined or declined."));
+  $$("#s-sugg [data-copy]").forEach(b => b.onclick = async () => {
+    const e = B.suggestions.find(x => x.id === +b.dataset.copy);
+    try { await navigator.clipboard.writeText(e.text); } catch { prompt("Copy this message:", e.text); return; }
+    if (confirm("Message copied. Mark the place as offered to " + e.name + "?")) setEnquiry(e.id, "offered", "Marked as offered");
+  });
+  $$("#s-sugg [data-skip]").forEach(b => b.onclick = () => confirm("Remove them from the priority list?") && setEnquiry(b.dataset.skip, "closed", "Removed. The next person moves up."));
+
+  const rows = B.slots.filter(s => $("#s-all").checked ? s.capacity : (s.members || s.line.length));
+  $("#s-table").innerHTML = `<thead><tr><th>Slot</th><th>Members</th><th>Places</th><th>Priority list</th></tr></thead><tbody>` +
+    (rows.length ? rows.map(s => {
+      const courts = Object.entries(s.courts).map(([cid, n]) => `<div class="small num">${cid}${courtBar(n, cap)}<b>${n}</b>/${cap}</div>`).join("");
+      const people = s.people.length ? `<details style="margin-top:6px"><summary class="tiny muted" style="cursor:pointer">${s.people.length} member${s.people.length > 1 ? "s" : ""}</summary>
+          ${s.people.map(p => `<div class="tiny" style="margin:3px 0">${esc(p.name)} <span class="faint">${p.court_id}</span> <a href="#" data-unslot="${p.id}" data-name="${esc(p.name)}">remove</a></div>`).join("")}</details>` : "";
+      const line = s.line.length ? s.line.map(e => `<div class="row small" style="gap:6px;margin:4px 0;flex-wrap:nowrap">
+          ${e.status === "offered" ? `<span class="pill warn">offered</span>` : e.suggested ? `<span class="pill ok">#${e.position} · place open</span>` : `<span class="pill plain">#${e.position}</span>`}
+          <span><b>${esc(e.name)}</b> <span class="faint">${e.phone}</span></span><span class="spacer"></span>
+          ${e.status === "offered" ? `<button class="sm" data-joined="${e.id}">Joined</button><button class="sm ghost" data-declined="${e.id}">Declined</button>`
+            : `<button class="sm ghost" data-skip2="${e.id}" title="Remove from list">✕</button>`}</div>`).join("")
+        : `<span class="faint small">—</span>`;
+      return `<tr><td><b>${esc(s.label)}</b><div class="tiny faint">daily</div></td><td>${courts || `<span class="faint small">academy</span>`}${people}</td>
+        <td>${s.free ? `<span class="pill ok">${s.free} free</span>` : s.capacity ? `<span class="pill bad">full</span>` : ""}${s.held ? `<div class="tiny faint">${s.held} held for offers</div>` : ""}</td>
+        <td style="min-width:300px">${line}</td></tr>`;
+    }).join("") : `<tr><td colspan="4"><div class="empty">No members have a slot yet. Give one from Members &amp; academy.</div></td></tr>`) + "</tbody>";
+  $$("#s-table [data-unslot]").forEach(a => a.onclick = e => { e.preventDefault(); releaseSlot(a.dataset.unslot, a.dataset.name, loadSlots); });
+  $$("#s-table [data-joined]").forEach(b => b.onclick = () => setEnquiry(b.dataset.joined, "joined", "Marked joined. Sell their plan and give them the slot under Members & academy."));
+  $$("#s-table [data-declined]").forEach(b => b.onclick = () => setEnquiry(b.dataset.declined, "closed", "Declined. The place goes to the next in line."));
+  $$("#s-table [data-skip2]").forEach(b => b.onclick = () => confirm("Remove them from the priority list?") && setEnquiry(b.dataset.skip2, "closed", "Removed from the list"));
+
+  $("#s-freed").innerHTML = B.released.length ? `<table><tbody>${B.released.map(r => `<tr><td class="who"><b>${esc(r.name)}</b><span>${esc(r.released_why)}</span></td>
+      <td><span class="pill plain">${esc(r.start_time)}</span></td><td class="small muted">${niceDate(r.released_at)}</td></tr>`).join("")}</tbody></table>`
+    : `<div class="empty">None yet.</div>`;
+  $("#s-closed").innerHTML = B.closed.length ? `<table><tbody>${B.closed.map(e => `<tr><td class="who"><b>${esc(e.name)}</b><span>${e.phone}</span></td>
+      <td><span class="pill plain">${esc(e.start_time)}</span></td><td>${e.status === "joined" ? `<span class="pill ok">joined</span>` : `<span class="pill">closed</span>`}</td></tr>`).join("")}</tbody></table>`
+    : `<div class="empty">None yet.</div>`;
+}
+$("#s-all").onchange = loadSlots;
+$("#s-new").onclick = () => { $("#s-form").classList.remove("hidden"); $("#sf-name").focus(); };
+$("#sf-cancel").onclick = () => $("#s-form").classList.add("hidden");
+$("#sf-save").onclick = async () => {
+  try {
+    const r = await api("/api/admin/enquiries", { name: $("#sf-name").value, phone: $("#sf-phone").value,
+      start_time: $("#sf-time").value, note: $("#sf-note").value });
+    toast(r.full ? `Slot is full. ${r.enquiry.name} is #${r.position} on the priority list.`
+      : `There's a place free now. ${r.enquiry.name} is at the top of the list with a message ready.`);
+    $("#sf-name").value = $("#sf-phone").value = $("#sf-note").value = ""; $("#s-form").classList.add("hidden");
+    loadSlots(); refresh();
   } catch (e) { toast(e.message, true); }
 };
 

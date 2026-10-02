@@ -12,11 +12,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from app import access, analytics, auth, bookings, clock, config, db, health, members, payments, scheduler
+from app import (access, analytics, auth, bookings, clock, config, coupons, db, health, members, payments,
+                 scheduler, slots)
 from app.auth import AuthError
 from app.bookings import BookingError
+from app.coupons import CouponError
 from app.members import MemberError
 from app.payments import PaymentError
+from app.slots import SlotError
 
 STATIC = Path(__file__).parent / "static"
 PAGES = {"/": "index.html", "/portal": "portal.html", "/admin": "admin.html", "/pay": "pay.html",
@@ -57,7 +60,7 @@ def get_config(req):
             "door_code_lead_min": config.DOOR_CODE_LEAD_MIN, "hold_min": config.HOLD_MIN,
             "payment_provider": config.PAYMENT_PROVIDER, "refund_policy": bookings.refund_policy_text(),
             "demo": config.DEMO_MODE, "membership_months": config.ONLINE_MEMBERSHIP_MONTH_OPTIONS,
-            "membership_monthly": config.ONLINE_MEMBERSHIP_MONTHLY}
+            "membership_monthly": config.ONLINE_MEMBERSHIP_MONTHLY, "welcome_coupon_pct": config.WELCOME_COUPON_PCT}
 
 
 @route("GET", "/api/availability")
@@ -75,8 +78,19 @@ def post_booking(req):
     """No account needed: name, mobile, email. Returns where to send the browser to pay."""
     b = req.body
     out = bookings.create(b.get("court_id"), b.get("date"), b.get("start"), b.get("slots", 1),
-                          b.get("name"), b.get("phone"), b.get("email"))
+                          b.get("name"), b.get("phone"), b.get("email"), b.get("coupon"))
     return {"booking": _public_booking(out["booking"]), "redirect": out["payment"]["redirect"]}
+
+
+@route("GET", "/api/coupon")
+def check_coupon(req):
+    """Booking form: is this welcome coupon good for this mobile? (The price is worked out again on booking.)"""
+    try:
+        phone = auth.normalize_phone(req.query.get("phone"))
+    except AuthError:
+        raise HttpError(400, "Enter your mobile number first: the coupon is tied to it")
+    c = coupons.check(req.query.get("code"), phone, 0)
+    return {"code": c["code"], "pct": c["pct"]}
 
 
 @route("GET", "/api/booking")
@@ -134,6 +148,8 @@ def pay_info(req):
         b = bookings.get(p["ref_id"])
         out["title"] = f"{b['court_name']} booking"
         out["detail"] = f"{clock.parse(b['start']).strftime('%a %d %b, %H:%M')}-{b['end'][11:]} · {b['name']}"
+        if b["discount"]:
+            out["detail"] += f" · welcome coupon -Rs {b['discount']}"
         out["hold_seconds"] = max(0, int((clock.parse(b["hold_until"]) - clock.now()).total_seconds()))             if b["hold_until"] else None
         out["booking_status"] = b["status"]
     else:
@@ -194,7 +210,7 @@ def _fulfil(p):
 
 def _public_booking(b, with_quote=False):
     keep = ("id", "ref", "court_id", "court_name", "sport", "name", "start", "end", "amount", "status", "hold_until",
-            "pay_status", "refund_amount", "cancelled_by", "phone", "email")
+            "pay_status", "refund_amount", "cancelled_by", "phone", "email", "discount", "coupon_code")
     out = {k: b.get(k) for k in keep}
     out["phone"] = out["phone"] and "******" + out["phone"][-4:]
     if with_quote:
@@ -205,6 +221,8 @@ def _public_booking(b, with_quote=False):
                               "status": d["status"]}
     p = payments.for_ref("booking", b["id"])
     out["refund_status"] = p and p["refund_status"]
+    # A guest without an account is invited to sign up for the welcome coupon.
+    out["has_account"] = bool(db.one("SELECT 1 AS x FROM users WHERE phone=?", b["phone"]))
     return out
 
 
@@ -285,6 +303,8 @@ def demo_info(req):
          "secret": "code shown on screen", "where": "/portal"},
         {"role": "Academy player (junior)", "login": auth.member_id(5) + "  or  9000000004",
          "secret": "code shown on screen", "where": "/portal"},
+        {"role": "New sign-up with a 10% welcome coupon", "login": "9811100002",
+         "secret": "code shown on screen", "where": "/portal"},
     ], "fingerprints": [{"id": "101", "who": "Aarav Mehta (member, active)"},
                         {"id": "104", "who": "Ishaan Verma (academy, fees paid)"},
                         {"id": "115", "who": "Farhan Sheikh (membership expired)"}]}
@@ -342,6 +362,7 @@ def overview(req):
     day = req.query.get("date") or clock.today().isoformat()
     todays = db.all_(
         "SELECT b.id,b.ref,b.court_id,c.name AS court,b.name,b.phone,b.email,b.start,b.end,b.amount,b.status,b.payment_ref,"
+        " b.discount, b.coupon_code,"
         " b.pay_status,b.source, d.code, d.status AS code_status, d.valid_from, d.uses FROM bookings b "
         "JOIN courts c ON c.id=b.court_id LEFT JOIN door_codes d ON d.booking_id=b.id "
         "WHERE substr(b.start,1,10)=? AND b.status IN ('confirmed','pending') ORDER BY b.start, b.court_id", day)
@@ -369,6 +390,7 @@ def overview(req):
     return {
         "date": day, "now": clock.fmt(clock.now()), "bookings": todays, "collected": collected,
         "expiring": expiring, "fees_due": fees_due, "unpaid": unpaid, "refunds": refunds,
+        "slot_openings": slots.board()["suggestions"],
         "notifications": db.all_("SELECT created_at,kind,channel,to_phone,body,status,error FROM notifications "
                                  "ORDER BY id DESC LIMIT 60"),
         "access": db.all_("SELECT a.at,a.device_id,a.method,a.granted,a.detail,u.name,b.ref FROM access_events a "
@@ -404,6 +426,7 @@ def people(req):
     for r in rows:
         s = members.status(r["id"])
         r["memberships"], r["academy"], r["access_until"] = s["memberships"], s["academy"], s["fingerprint"]["until"]
+        r["slot"], r["slot_ok"] = s["slot"], slots.eligible(r["id"])
         r["member_id"] = auth.member_id(r["id"])
     return {"people": rows}
 
@@ -411,15 +434,44 @@ def people(req):
 @route("POST", "/api/admin/people", "admin")
 def save_person(req):
     b = req.body
+    new = not db.one("SELECT 1 AS x FROM users WHERE phone=?", auth.normalize_phone(b.get("phone")))
     uid = members.upsert_person(b.get("name"), b.get("phone"), b.get("email") or None, b.get("lock_user_id"),
                                 b.get("guardian_name") or None, b.get("sms_opt", 1), b.get("wa_opt", 1))
-    return {"id": uid}
+    c = coupons.for_user(uid) if new else None
+    return {"id": uid, "welcome_coupon": c and c["code"]}
 
 
 @route("POST", "/api/admin/memberships", "admin")
 def add_membership(req):
     return {"membership": members.add_membership(int(req.body["user_id"]), int(req.body["plan_id"]),
                                                  int(req.body.get("months", 1)), req.user["name"])}
+
+
+@route("GET", "/api/admin/slots", "admin")
+def slot_board(req):
+    return {**slots.board(), "times": [{"start_time": t, "label": slots.label(t)} for t in slots.slot_times()]}
+
+
+@route("POST", "/api/admin/slots", "admin")
+def assign_slot(req):
+    return slots.assign(int(req.body["user_id"]), req.body.get("start_time"), req.user["name"])
+
+
+@route("POST", r"/api/admin/slots/(\d+)/release", "admin")
+def release_slot(req, sid):
+    slots.release(int(sid), "removed by staff")
+    return {"ok": True}
+
+
+@route("POST", "/api/admin/enquiries", "admin")
+def add_enquiry(req):
+    b = req.body
+    return slots.add_enquiry(b.get("name"), b.get("phone"), b.get("start_time"), b.get("note"), req.user["name"])
+
+
+@route("POST", r"/api/admin/enquiries/(\d+)", "admin")
+def update_enquiry(req, eid):
+    return {"enquiry": slots.set_enquiry(int(eid), req.body.get("status"))}
 
 
 @route("POST", "/api/admin/enroll", "admin")
@@ -559,7 +611,7 @@ class Handler(BaseHTTPRequestHandler):
             raise HttpError(404, "Not found")
         except HttpError as e:
             self._json(e.status, {"error": str(e)})
-        except (BookingError, AuthError, MemberError, PaymentError) as e:
+        except (BookingError, AuthError, MemberError, PaymentError, SlotError, CouponError) as e:
             self._json(400, {"error": str(e)})
         except (KeyError, ValueError) as e:
             self._json(400, {"error": f"Bad request: {e}"})

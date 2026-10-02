@@ -96,7 +96,9 @@ CREATE TABLE IF NOT EXISTS bookings (
     cancelled_by TEXT,                          -- customer | staff | system
     refund_amount INTEGER NOT NULL DEFAULT 0,
     email        TEXT,
-    access_key   TEXT                           -- secret in the confirmation link (no login needed)
+    access_key   TEXT,                          -- secret in the confirmation link (no login needed)
+    coupon_code  TEXT,                          -- welcome coupon applied to this booking
+    discount     INTEGER NOT NULL DEFAULT 0     -- rupees taken off by the coupon (amount is after it)
 );
 CREATE INDEX IF NOT EXISTS ix_bookings_court_start ON bookings(court_id, start);
 
@@ -173,6 +175,46 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at TEXT NOT NULL
 );
 
+-- Badminton members play in a fixed daily slot: at most MEMBER_SLOT_CAPACITY per court per slot.
+CREATE TABLE IF NOT EXISTS member_slots (
+    id          INTEGER PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    court_id    TEXT NOT NULL REFERENCES courts(id),
+    start_time  TEXT NOT NULL,     -- HH:MM, every day, one SLOT_MIN slot
+    status      TEXT NOT NULL DEFAULT 'active',  -- active | released
+    released_at TEXT,
+    released_why TEXT,             -- membership lapsed | removed by staff
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_member_slots ON member_slots(start_time, status);
+
+-- People who asked for a member slot. When the slot is full they wait in line (oldest first).
+CREATE TABLE IF NOT EXISTS enquiries (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    phone       TEXT NOT NULL,
+    start_time  TEXT NOT NULL,     -- the slot they want, HH:MM
+    note        TEXT,
+    status      TEXT NOT NULL DEFAULT 'waiting',  -- waiting | offered | joined | closed
+    created_by  TEXT,
+    created_at  TEXT NOT NULL,
+    offered_at  TEXT,
+    closed_at   TEXT
+);
+
+-- Welcome coupons: a guest who creates an account gets one, for 10% off their next court booking.
+CREATE TABLE IF NOT EXISTS coupons (
+    id          INTEGER PRIMARY KEY,
+    code        TEXT NOT NULL UNIQUE,
+    user_id     INTEGER NOT NULL UNIQUE REFERENCES users(id),  -- one welcome coupon per person, ever
+    phone       TEXT NOT NULL,     -- only valid on bookings made with this mobile
+    pct         INTEGER NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'active',  -- active | used
+    booking_id  INTEGER REFERENCES bookings(id),
+    created_at  TEXT NOT NULL,
+    used_at     TEXT
+);
+
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
 """
 
@@ -202,7 +244,8 @@ _ADDED = {
     "bookings": [
         ("pay_status", "TEXT NOT NULL DEFAULT 'unpaid'"), ("source", "TEXT NOT NULL DEFAULT 'online'"),
         ("cancelled_at", "TEXT"), ("cancelled_by", "TEXT"), ("refund_amount", "INTEGER NOT NULL DEFAULT 0"),
-        ("email", "TEXT"), ("access_key", "TEXT"),
+        ("email", "TEXT"), ("access_key", "TEXT"), ("coupon_code", "TEXT"),
+        ("discount", "INTEGER NOT NULL DEFAULT 0"),
     ],
     "payments": [("secret", "TEXT")],
 }
@@ -263,7 +306,8 @@ def kv_set(k, v):
     conn().execute("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (k, v))
 
 
-TABLES = ["sessions", "login_otps", "notifications", "access_events", "door_codes", "payments", "bookings",
+TABLES = ["coupons", "enquiries", "member_slots",
+          "sessions", "login_otps", "notifications", "access_events", "door_codes", "payments", "bookings",
           "court_blocks", "academy_enrollments", "academy_batches", "memberships", "plans", "courts", "users", "kv"]
 
 

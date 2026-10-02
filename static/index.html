@@ -19,7 +19,8 @@
     <p>No account, no queue at the desk. Pay online and your door code arrives on SMS &amp; WhatsApp. It opens the
       door from <b id="lead-min">10</b> minutes before you play.</p>
     <div class="chips"><span class="chip"><b>5</b> courts</span><span class="chip">Open <b id="hours">6am–11pm</b></span>
-      <span class="chip">Door code by <b>SMS</b></span><span class="chip">Free cancellation <b id="free-h">24h</b> before</span></div>
+      <span class="chip">Door code by <b>SMS</b></span><span class="chip">Free cancellation <b id="free-h">24h</b> before</span>
+      <button class="chip hidden" id="lead-open" style="background:var(--lime);color:var(--lime-ink);border:0;cursor:pointer"><span>🎁 Sign up, get <b class="lead-pct">10%</b> off</span></button></div>
   </section>
 
   <div class="steps-line" aria-hidden="true"><span class="on"><i>1</i>Pick a slot</span><hr><span><i>2</i>Your details</span>
@@ -55,6 +56,12 @@
     <input id="phone" inputmode="tel" autocomplete="tel" placeholder="98xxxxxxxx"></div>
   <div class="field"><label for="email">Email</label>
     <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>
+  <div class="field"><label for="coupon">Coupon code (optional)</label>
+    <div class="row" style="flex-wrap:nowrap"><input id="coupon" placeholder="WELCOME-XXXXX" style="text-transform:uppercase">
+      <button class="ghost" id="coupon-go" type="button">Apply</button></div>
+    <p class="small" id="coupon-msg" style="margin:6px 0 0"></p></div>
+  <p class="small muted hidden" id="signup-hint" style="margin-top:10px">New here? <a href="#" id="signup-link">Sign up free</a>
+    and get <b class="lead-pct">10%</b> off this booking.</p>
   <p class="small muted" style="margin-top:14px">Next you'll go to the secure payment page. We hold the slot for you
     for <b id="hold-min">10</b> minutes.</p>
   <div class="row" style="margin-top:14px"><button class="ghost" data-close>Back</button><span class="spacer"></span>
@@ -80,6 +87,27 @@
   </div>
   <div class="row" style="margin-top:14px"><button class="ghost" data-close>Close</button><span class="spacer"></span>
     <button id="f-go">Look up</button></div>
+</div></div>
+
+<!-- sign-up offer: name + mobile → verified by a one-time code → account + welcome coupon on this booking -->
+<div class="sheet-bg hidden" id="lead"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="lead-h">
+  <div class="eyebrow">New here? 🎁</div>
+  <h2 id="lead-h" style="margin-top:4px">Sign up free &amp; get <span class="lead-pct">10%</span> off your booking</h2>
+  <p class="small muted">Create your account with your mobile number and your coupon is applied straight away. Works on
+    badminton, pickleball and padel. We'll also send it by SMS &amp; WhatsApp.</p>
+  <div id="lead-1">
+    <div class="field"><label for="lead-name">Full name</label><input id="lead-name" autocomplete="name"></div>
+    <div class="field"><label for="lead-phone">Mobile number</label><input id="lead-phone" inputmode="tel" autocomplete="tel" placeholder="98xxxxxxxx"></div>
+    <button class="lime block" id="lead-send" style="margin-top:16px"><span>Get my <span class="lead-pct">10%</span> off →</span></button>
+  </div>
+  <div id="lead-2" class="hidden">
+    <div class="field"><label for="lead-code">Enter the 6-digit code we sent to your phone</label>
+      <input id="lead-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="letter-spacing:.3em;font-weight:800;font-size:1.2rem"></div>
+    <p class="small muted" id="lead-demo"></p>
+    <button class="lime block" id="lead-verify" style="margin-top:12px">Sign up &amp; apply coupon</button>
+  </div>
+  <p class="small" id="lead-msg" style="margin:10px 0 0"></p>
+  <button class="ghost block" data-close id="lead-no" style="margin-top:8px">No thanks</button>
 </div></div>
 
 <script src="/common.js"></script>
@@ -115,6 +143,7 @@ async function init() {
   S.date = S.cfg.today;
   const q = new URLSearchParams(location.search);
   if (q.get("cancelled")) toast("Payment cancelled. The slot has been released.");
+  if (q.get("coupon")) $("#coupon").value = q.get("coupon");
   pickSport(q.get("sport") || S.cfg.sports[0].sport);
 }
 
@@ -196,16 +225,35 @@ $("#continue").onclick = () => {
   $("#sheet-sum").innerHTML = `<span class="ico">${SPORT_ICON[S.sport]}</span><div><b>${esc(s.court.name)}</b>
     <div class="small muted">${niceDate(S.date)} · ${s.start}–${s.end} · ${s.slots} hr</div></div>
     <span class="spacer"></span><b class="num">${rupees(s.price)}</b>`;
-  $("#pay-amt").textContent = rupees(s.price);
+  showPrice();
   openSheet("sheet"); $("#name").focus();
 };
+
+// ---- welcome coupon: tied to the mobile it was sent to, so it's checked against the number entered
+function showPrice() {
+  const s = selection(); if (!s) return;
+  const off = S.coupon ? Math.floor(s.price * S.coupon.pct / 100) : 0;
+  $("#pay-amt").textContent = rupees(s.price - off);
+  $("#sheet-sum .num").innerHTML = off ? `<s class="faint" style="font-weight:500">${rupees(s.price)}</s> ${rupees(s.price - off)}` : rupees(s.price);
+  $("#coupon-msg").innerHTML = S.coupon ? `<span style="color:var(--ok)">✓ ${S.coupon.pct}% off applied: you save ${rupees(off)}</span>` : $("#coupon-msg").innerHTML;
+}
+$("#coupon-go").onclick = async () => {
+  const code = $("#coupon").value.trim();
+  S.coupon = null;
+  if (!code) { $("#coupon-msg").textContent = ""; return showPrice(); }
+  try { S.coupon = await api(`/api/coupon?code=${encodeURIComponent(code)}&phone=${encodeURIComponent($("#phone").value)}`); }
+  catch (e) { $("#coupon-msg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+  showPrice();
+};
+$("#coupon").addEventListener("keydown", e => e.key === "Enter" && $("#coupon-go").click());
+$("#coupon").oninput = $("#phone").oninput = () => { if (S.coupon) { S.coupon = null; $("#coupon-msg").textContent = ""; showPrice(); } };
 
 $("#hold").onclick = async () => {
   const s = selection();
   $("#hold").disabled = true;
   try {
     const r = await api("/api/bookings", { court_id: s.court.id, date: S.date, start: s.start, slots: s.slots,
-      name: $("#name").value, phone: $("#phone").value, email: $("#email").value });
+      name: $("#name").value, phone: $("#phone").value, email: $("#email").value, coupon: $("#coupon").value.trim() });
     location.href = r.redirect;                    // → payment page → back to the confirmation page
   } catch (e) { toast(e.message, true); if (/booked|reserved/.test(e.message)) pickDate(S.date); $("#hold").disabled = false; }
 };
@@ -244,7 +292,64 @@ $("#f-confirm").onclick = async () => {
   } catch (e) { toast(e.message, true); }
 };
 
-init().catch(e => toast(e.message, true));
+// ---- sign-up offer popup (lead capture). Shown once a few seconds after arriving, to visitors who
+// aren't logged in and haven't said "no thanks" this week; the hero chip reopens it any time.
+const LEAD_KEY = "nr_lead_dismissed";
+function leadSeen() { try { return Date.now() - (+localStorage.getItem(LEAD_KEY) || 0) < 7 * 864e5; } catch { return false; } }
+function leadDismiss() { try { localStorage.setItem(LEAD_KEY, Date.now()); } catch {} }
+function openLead() {
+  $("#lead-1").classList.remove("hidden"); $("#lead-2").classList.add("hidden"); $("#lead-msg").textContent = "";
+  $("#lead-name").value ||= $("#name").value; $("#lead-phone").value ||= $("#phone").value;
+  openSheet("lead"); $("#lead-name").focus();
+}
+async function setupLead() {
+  const pct = S.cfg.welcome_coupon_pct;
+  if (!pct) return;
+  try { await api("/api/me"); return; } catch {}             // already has an account
+  $$(".lead-pct").forEach(e => e.textContent = pct + "%");
+  $("#lead-open").classList.remove("hidden");
+  $("#lead-open").onclick = openLead;
+  $("#signup-hint").classList.remove("hidden");
+  $("#signup-link").onclick = e => { e.preventDefault(); $("#sheet").classList.add("hidden"); openLead(); };
+  if (!leadSeen() && !new URLSearchParams(location.search).get("coupon")) setTimeout(() => {
+    if ($("#sheet").classList.contains("hidden") && $("#find").classList.contains("hidden")) openLead();
+  }, 5000);
+}
+$("#lead-no").addEventListener("click", leadDismiss);
+$("#lead-send").onclick = async () => {
+  $("#lead-msg").textContent = "";
+  if (!$("#lead-name").value.trim()) return $("#lead-msg").innerHTML = `<span style="color:var(--bad)">Please enter your name</span>`;
+  $("#lead-send").disabled = true;
+  try {
+    const r = await api("/api/auth/request-code", { phone: $("#lead-phone").value });
+    if (!r.new) {
+      $("#lead-msg").innerHTML = `This number already has an account, so the welcome offer has been used. <a href="/portal">Log in</a> to see your bookings.`;
+      return;
+    }
+    $("#lead-1").classList.add("hidden"); $("#lead-2").classList.remove("hidden");
+    if (r.demo_code) { $("#lead-code").value = r.demo_code; $("#lead-demo").textContent = `Demo mode: no real SMS, your code is ${r.demo_code}.`; }
+    $("#lead-code").focus();
+  } catch (e) { $("#lead-msg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+  finally { $("#lead-send").disabled = false; }
+};
+$("#lead-verify").onclick = async () => {
+  try {
+    await api("/api/auth/verify", { phone: $("#lead-phone").value, code: $("#lead-code").value, name: $("#lead-name").value });
+    const me = await api("/api/me");
+    leadDismiss();
+    $("#lead").classList.add("hidden"); $("#lead-open").classList.add("hidden"); $("#signup-hint").classList.add("hidden");
+    if (selection()) openSheet("sheet");                       // back to the booking they were making
+    $("#name").value = me.user.name; $("#phone").value = me.user.phone;
+    if (me.coupon && me.coupon.status === "active") {
+      $("#coupon").value = me.coupon.code; S.coupon = { code: me.coupon.code, pct: me.coupon.pct };
+      $("#coupon-msg").textContent = ""; showPrice();
+      toast(`Welcome! ${me.coupon.pct}% off is applied to your booking (code ${me.coupon.code}, also sent by SMS).`);
+    } else toast("Welcome! Your account is ready.");
+  } catch (e) { $("#lead-msg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+};
+$("#lead-code").addEventListener("keydown", e => e.key === "Enter" && $("#lead-verify").click());
+
+init().then(setupLead).catch(e => toast(e.message, true));
 </script>
 </body>
 </html>

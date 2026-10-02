@@ -3,7 +3,7 @@ from datetime import date as Date, timedelta
 
 import json
 
-from . import access, clock, config, db, notify, payments, seed
+from . import access, clock, config, coupons, db, notify, payments, seed, slots
 
 
 class MemberError(Exception):
@@ -69,6 +69,8 @@ def status(user_id):
                              "months": config.ONLINE_MEMBERSHIP_MONTH_OPTIONS,
                              "starts": _next_start(user_id).isoformat()},
         "refund_policy": bk.refund_policy_text(),
+        "slot": slots.for_user(user_id),
+        "coupon": coupons.for_user(user_id),
     }
 
 
@@ -102,6 +104,8 @@ def upsert_person(name, phone, email=None, lock_user_id=None, guardian_name=None
                          clock.fmt(clock.now()))).lastrowid
     # Claim any bookings made with this phone before they were registered.
     c.execute("UPDATE bookings SET user_id=? WHERE phone=? AND user_id IS NULL", (uid, phone))
+    if not existing:
+        coupons.issue_welcome(uid)  # new person registered at the desk: same welcome offer as a self sign-up
     access.sync_member_access()
     return uid
 

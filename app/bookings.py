@@ -10,7 +10,7 @@ import re
 import secrets
 from datetime import date as Date, datetime, timedelta
 
-from . import access, clock, config, db, notify, payments
+from . import access, clock, config, coupons, db, notify, payments
 
 
 class BookingError(Exception):
@@ -36,8 +36,13 @@ def _live_bookings(c, court_ids, start, end):
 
 
 def _blocks(c, court_ids, day):
-    """Academy batches (recurring weekly) and one-off blocks on that day → [(court, start, end, reason)]."""
+    """Academy batches (recurring weekly), badminton members' daily slots and one-off blocks on
+    that day → [(court, start, end, reason)]."""
     out = []
+    for r in c.execute("SELECT DISTINCT court_id, start_time FROM member_slots WHERE status='active'").fetchall():
+        if r["court_id"] in court_ids:
+            end = (datetime.strptime(r["start_time"], "%H:%M") + timedelta(minutes=config.SLOT_MIN)).strftime("%H:%M")
+            out.append((r["court_id"], r["start_time"], end, "Members"))
     for b in c.execute("SELECT * FROM academy_batches").fetchall():
         if str(day.weekday()) in b["weekdays"].split(","):
             for cid in b["court_ids"].split(","):
@@ -140,14 +145,24 @@ def _insert(c, court, day, start, end, name, phone, amount, status, pay_status, 
          secrets.token_urlsafe(12))).lastrowid
 
 
-def create(court_id, day, start_hhmm, slots, name, phone, email=None):
-    """Online booking, no account needed: holds the slot and opens a payment."""
+def create(court_id, day, start_hhmm, slots, name, phone, email=None, coupon=None):
+    """Online booking, no account needed: holds the slot and opens a payment. `coupon`: a welcome
+    coupon issued to this phone, taken off the price."""
     court, day, start, end, name, phone, amount = _validate(court_id, day, start_hhmm, slots, name, phone)
     email = _clean_email(email)
-    with db.tx() as c:
-        bid = _insert(c, court, day, start, end, name, phone, amount, "pending", "unpaid", "online", email)
+    try:
+        disc = coupons.check(coupon, phone, amount) if (coupon or "").strip() else None
+        with db.tx() as c:
+            bid = _insert(c, court, day, start, end, name, phone, amount - (disc["discount"] if disc else 0),
+                          "pending", "unpaid", "online", email)
+            if disc:
+                c.execute("UPDATE bookings SET coupon_code=?, discount=? WHERE id=?",
+                          (disc["code"], disc["discount"], bid))
+                coupons.take(c, disc["code"], bid)
+    except coupons.CouponError as e:
+        raise BookingError(str(e))
     b = get(bid)
-    pay = payments.create_order("booking", amount, b["ref"], phone, b["user_id"], ref_id=bid)
+    pay = payments.create_order("booking", b["amount"], b["ref"], phone, b["user_id"], ref_id=bid)
     return {"booking": b, "payment": pay}
 
 
@@ -218,8 +233,12 @@ def fulfil(p):
         else:
             c.execute("UPDATE bookings SET status='confirmed', pay_status='paid', payment_ref=?, paid_at=?, "
                       "hold_until=NULL WHERE id=?", (p["payment_id"], clock.fmt(clock.now()), b["id"]))
+            if b["coupon_code"]:  # hold lapsed and gave the coupon back before the money arrived: take it again
+                c.execute("UPDATE coupons SET status='used', booking_id=?, used_at=? WHERE code=? AND status='active'",
+                          (b["id"], clock.fmt(clock.now()), b["coupon_code"]))
     if taken:
         payments.request_refund(p["id"], p["amount"])
+        coupons.release_unpaid()
         raise BookingError("Payment received, but the slot was taken after your 10-minute hold ran out. "
                            "Your money is being refunded automatically.")
     return _on_confirmed(b["id"])
@@ -284,6 +303,7 @@ def cancel(booking_id, by="customer"):
         if cur.rowcount != 1:
             raise BookingError("This booking was already cancelled")
     access.revoke_for_booking(booking_id, f"cancelled by {by}")
+    coupons.release_unpaid()  # cancelled before paying: the coupon can be used again
     p = payments.for_ref("booking", booking_id)
     if p and q["amount"]:
         p = payments.request_refund(p["id"], q["amount"])
@@ -305,6 +325,7 @@ def cancel(booking_id, by="customer"):
 def expire_holds():
     db.conn().execute("UPDATE bookings SET status='expired' WHERE status='pending' AND hold_until <= ?",
                       (clock.fmt(clock.now()),))
+    coupons.release_unpaid()
 
 
 def lookup(ref, phone):
@@ -317,6 +338,7 @@ def release_hold(booking_id):
     """Customer backed out on the payment page: free the slot straight away."""
     db.conn().execute("UPDATE bookings SET status='expired', hold_until=NULL WHERE id=? AND status='pending'",
                       (booking_id,))
+    coupons.release_unpaid()
 
 
 def by_key(ref, key):

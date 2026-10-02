@@ -81,6 +81,7 @@ MSG91_FLOWS = {
     "booking_cancelled": env("MSG91_FLOW_CANCELLED"),
     "refund_issued": env("MSG91_FLOW_REFUND"),
     "membership_confirmed": env("MSG91_FLOW_MEMBERSHIP_OK"),
+    "welcome_coupon": env("MSG91_FLOW_WELCOME_COUPON"),
 }
 
 WA_TOKEN = env("WA_TOKEN")
@@ -97,6 +98,7 @@ WA_TEMPLATES = {
     "booking_cancelled": env("WA_TPL_CANCELLED", "booking_cancelled"),
     "refund_issued": env("WA_TPL_REFUND", "refund_issued"),
     "membership_confirmed": env("WA_TPL_MEMBERSHIP_OK", "membership_confirmed"),
+    "welcome_coupon": env("WA_TPL_WELCOME_COUPON", "welcome_coupon"),
 }
 
 LOCK_BRIDGE_URL = env("LOCK_BRIDGE_URL")        # http_bridge: your on-site bridge service
@@ -143,6 +145,16 @@ PRICES = {sport: p * SLOT_MIN // 60 for sport, p in PRICES_PER_HOUR.items()}
 # Membership bought online in the member portal: all courts, fingerprint entry.
 ONLINE_MEMBERSHIP_MONTHLY = env_int("ONLINE_MEMBERSHIP_MONTHLY", 2000)
 ONLINE_MEMBERSHIP_MONTH_OPTIONS = [int(x) for x in env("ONLINE_MEMBERSHIP_MONTHS", "1,3,6").split(",")]
+
+# Badminton members each have a fixed daily slot. At most this many members share one court in a
+# slot; a court with members on it is closed to public booking at that hour. Courts fill one at a time.
+MEMBER_SLOT_SPORT = "badminton"
+MEMBER_SLOT_CAPACITY = env_int("MEMBER_SLOT_CAPACITY", 6)
+# Days after a membership ends before its slot is released to the next person in line.
+MEMBER_SLOT_GRACE_DAYS = env_int("MEMBER_SLOT_GRACE_DAYS", 0)
+
+# Welcome coupon: a guest who creates an account gets this % off their next court booking (any sport).
+WELCOME_COUPON_PCT = env_int("WELCOME_COUPON_PCT", 10)
 
 # Customer cancellation refunds: full refund if cancelled this many hours ahead, partial
 # (REFUND_PARTIAL_PCT) if at least REFUND_PARTIAL_HOURS ahead, nothing after that.

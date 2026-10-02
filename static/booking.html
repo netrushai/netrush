@@ -62,8 +62,14 @@ function render(b, policy) {
         <dt>Reference</dt><dd><code class="big">${esc(b.ref)}</code></dd>
         <dt>Court</dt><dd>${esc(b.court_name)}</dd>
         <dt>When</dt><dd>${when}</dd>
-        <dt>Paid</dt><dd>${rupees(b.amount)}</dd>
+        <dt>Paid</dt><dd>${rupees(b.amount)}${b.discount ? ` <span class="small muted">(welcome coupon saved you ${rupees(b.discount)})</span>` : ""}</dd>
       </dl></div>`;
+
+  const pct = CFG.welcome_coupon_pct;
+  const join = ok && !b.has_account && pct ? `<div class="card" style="border:1.5px solid var(--lime)">
+      <div class="row"><div><div class="eyebrow">First time here?</div><h3 style="margin:6px 0 4px">Get ${pct}% off your next court booking</h3>
+        <p class="small muted" style="margin:0">Create your free account with this mobile number and we'll send you a ${pct}% coupon for badminton, pickleball or padel.</p></div>
+        <span class="spacer"></span><a class="btn lime sm" href="/portal">Create account →</a></div></div>` : "";
 
   const door = ok && b.door_code ? `<div class="doorcard">
       <div class="eyebrow" style="color:rgb(255 255 255 / .55)">Your door code</div>
@@ -84,7 +90,7 @@ function render(b, policy) {
       <span class="spacer"></span><button class="danger sm" id="cancel">Cancel booking</button></div>
       <p class="tiny faint" style="margin:10px 0 0">${esc(policy)}</p></div>` : "";
 
-  $("#root").innerHTML = `<div>${head}</div>${door}${details}${how}${cancel}`;
+  $("#root").innerHTML = `<div>${head}</div>${door}${details}${join}${how}${cancel}`;
   const c = $("#cancel");
   if (c) c.onclick = async () => {
     if (!confirm(`Cancel booking ${b.ref}? ${b.cancel.note}.`)) return;

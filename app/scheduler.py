@@ -3,7 +3,7 @@ tick, or a missed tick never double-sends or loses anything."""
 import threading
 import traceback
 
-from . import access, bookings, clock, config, db, members, payments
+from . import access, bookings, clock, config, db, members, payments, slots
 
 TICK_SECONDS = 30
 
@@ -15,6 +15,7 @@ def tick():
     access.issue_due_codes()        # door codes going out DOOR_CODE_LEAD_MIN before each slot
     access.expire_codes()           # and removed from the lock when the slot ends
     access.sync_member_access()     # fingerprints on/off as memberships start and lapse
+    slots.release_lapsed()          # lapsed badminton members free their slot for the next in line
     today = clock.today().isoformat()
     if clock.now().hour >= config.REMINDER_HOUR and db.kv_get("reminders_ran") != today:
         members.send_reminders()    # 7-day and last-day SMS + WhatsApp

@@ -44,6 +44,7 @@
         <li>Renew online, ₹<span id="mprice">2,000</span> / month</li>
         <li>Academy schedule, fees and attendance</li>
         <li>Manage and cancel court bookings</li>
+        <li id="l-gift" class="hidden"><b style="color:var(--lime)">New here?</b> Sign up and get <span id="l-pct">10</span>% off your next court booking</li>
       </ul>
     </div>
     <div class="form">
@@ -77,6 +78,7 @@ async function load() {
   demoBar(CFG);
   $("#facility").textContent = CFG.facility; document.title = "Members · " + CFG.facility;
   $("#mprice").textContent = Number(CFG.membership_monthly).toLocaleString("en-IN");
+  if (CFG.welcome_coupon_pct) { $("#l-pct").textContent = CFG.welcome_coupon_pct; $("#l-gift").classList.remove("hidden"); }
   try { render(ME = await api("/api/me")); }
   catch (e) {
     if (e.status !== 401) return toast(e.message, true);
@@ -190,6 +192,17 @@ function render(s) {
         <td style="text-align:right">${e.granted ? `<span class="pill ok">Entered</span>` : `<span class="pill bad">Denied</span>`}</td></tr>`).join("")}
     </tbody></table>` : `<div class="empty">No entries yet.</div>`}</div>`;
 
+  const cp = s.coupon;
+  const coupon = cp && cp.status === "active" ? `<div class="doorcard" style="background:var(--night);color:#fff;border-radius:20px;padding:22px">
+      <div class="eyebrow" style="color:rgb(255 255 255 / .55)">Welcome gift</div>
+      <h2 style="color:#fff;margin:6px 0 4px">${cp.pct}% off your next court booking</h2>
+      <p style="margin:0;color:rgb(255 255 255 / .75)" class="small">Badminton, pickleball or padel. Enter this code when you book, with your mobile ${esc(u.phone)}.</p>
+      <div class="row" style="margin-top:14px"><code class="big" style="font-size:1.3rem;letter-spacing:.08em;color:var(--lime)">${esc(cp.code)}</code>
+        <span class="spacer"></span><a class="btn lime sm" href="/?coupon=${encodeURIComponent(cp.code)}">Book a court →</a></div></div>`
+    : cp ? `<div class="card flat small muted">Welcome coupon ${esc(cp.code)} used${cp.booking_ref ? " on booking " + esc(cp.booking_ref) : ""}.</div>` : "";
+  const slot = s.slot ? `<div class="card"><div class="eyebrow">Your members' slot</div>
+      <h3 style="margin-top:6px">🏸 ${esc(s.slot.label)}, every day</h3><p class="small muted" style="margin:0">${esc(s.slot.court)}. To change it, ask at the front desk.</p></div>` : "";
+
   const prefs = `<div class="card"><h2>Reminders</h2>
     <p class="small muted">We remind you 7 days before your plan ends and again on the last day.</p>
     <label class="check"><input type="checkbox" id="p-sms" ${u.sms_opt ? "checked" : ""}> SMS</label>
@@ -197,7 +210,9 @@ function render(s) {
 
   $("#dash").innerHTML = `
     <div class="page-head"><div><div class="eyebrow">Welcome back</div><h1 style="margin-top:4px">Hi ${first} 👋</h1></div></div>
+    ${coupon}
     <div class="grid2">${card}${access}</div>
+    ${slot}
     <div class="grid2">${buy}${acad || bk}</div>
     <div class="grid2">${acad ? bk : ent}${acad ? ent : prefs}</div>
     ${acad ? `<div class="grid2">${prefs}</div>` : ""}`;
